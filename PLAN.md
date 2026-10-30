@@ -1,6 +1,6 @@
 # SX1302 Reticulum Interface — Implementation Plan
 
-Status: draft, ready for phased implementation  
+Status: Phase 1 implemented; Phase 2 hardware bring-up next  
 Date: 2026-10-30  
 Baseline: Semtech `sx1302_hal` v2.1.0 (now vendored under `vendor/sx1302_hal/`)  
 Reference: [`SX1302_RETICULUM_FINDINGS.md`](SX1302_RETICULUM_FINDINGS.md)
@@ -187,7 +187,16 @@ Reticulum process
 Exit criteria: upstream tree still builds from its new location; project root
 contains only project-owned files.
 
-### Phase 1 — Shared HAL and ABI safety
+### Phase 1 — Shared HAL and ABI safety (implemented)
+
+Implemented artifacts:
+
+- `patches/0001-optional-temperature-sensor.patch`
+- `scripts/build_hal.sh`
+- `scripts/abi_probe.c`
+- `scripts/abi_check.py`
+- `sx1302_reticulum/structs.py`
+- `tests/test_structs.py`, `tests/test_abi.py`, `tests/test_hal_load.py`
 
 Tasks:
 

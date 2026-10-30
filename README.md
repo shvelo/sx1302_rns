@@ -8,9 +8,9 @@ for Reticulum. It does **not** run a packet forwarder, does not speak GWMP, and
 does not emulate RNode KISS. Instead, a Reticulum external interface loads the
 SX1302 HAL as a shared library through `ctypes` and drives the radio directly.
 
-> **Status:** bootstrap and planning. The upstream Semtech source has been
-> vendored, but the custom interface is not implemented yet. See
-> [`PLAN.md`](PLAN.md).
+> **Status:** Phase 1 complete. The upstream Semtech source is vendored, the
+> patched shared HAL builds as `build/libloragw.so`, and the ctypes ABI is
+> verified. Hardware bring-up is next. See [`PLAN.md`](PLAN.md).
 
 ## Documentation
 
