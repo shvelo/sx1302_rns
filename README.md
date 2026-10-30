@@ -10,10 +10,15 @@ SX1302 HAL as a shared library through `ctypes` and drives the radio directly.
 
 > **Status:** Phase 1 complete. The upstream Semtech source is vendored, the
 > patched shared HAL builds as `build/libloragw.so`, and the ctypes ABI is
-> verified. Hardware bring-up is next. See [`PLAN.md`](PLAN.md).
+> verified. Phase 2 bring-up scaffolding is in place; hardware validation is
+> pending. See [`PLAN.md`](PLAN.md) and the
+> [Raspberry Pi test guide](docs/raspberry-pi-testing.md).
 
 ## Documentation
 
+- [`docs/raspberry-pi-testing.md`](docs/raspberry-pi-testing.md) — step-by-step
+  hardware bring-up on a Raspberry Pi with a RAK2287: OS setup, SPI/GPIO
+  permissions, build, TX/RX smoke tests, and troubleshooting.
 - [`PLAN.md`](PLAN.md) — phased implementation plan, architecture, risks, and
   acceptance criteria.
 - [`SX1302_RETICULUM_FINDINGS.md`](SX1302_RETICULUM_FINDINGS.md) — research
@@ -31,6 +36,7 @@ patches/               Minimal source patches applied during the HAL build
 scripts/               Build, ABI check, smoke test, install helpers
 tests/                 Unit tests that do not require hardware
 examples/              Example Reticulum and board configuration
+docs/                  Hardware bring-up and operator documentation
 vendor/sx1302_hal/     Upstream Semtech sx1302_hal v2.1.0
 ```
 
