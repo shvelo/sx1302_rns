@@ -73,7 +73,7 @@ groups
 ## 3. Clone, build, and run the unit tests
 
 ```bash
-git clone <repository-url> sx1302_hal
+git clone https://github.com/shvelo/sx1302_rns.git sx1302_hal
 cd sx1302_hal
 git checkout feature/reticulum-sx1302-interface
 ```
