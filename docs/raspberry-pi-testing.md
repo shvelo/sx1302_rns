@@ -73,8 +73,8 @@ groups
 ## 3. Clone, build, and run the unit tests
 
 ```bash
-git clone https://github.com/shvelo/sx1302_rns.git sx1302_hal
-cd sx1302_hal
+git clone https://github.com/shvelo/sx1302_rns.git
+cd sx1302_rns
 git checkout feature/reticulum-sx1302-interface
 ```
 
@@ -116,8 +116,10 @@ Test it manually first:
 ./scripts/reset_rak2287.sh start
 ```
 
-On a Pi 3 or 4 this uses sysfs GPIO if available, otherwise `gpioset`. On a
-Pi 5 sysfs GPIO is not available and the script uses `gpiochip4`.
+The script addresses the reset line by GPIO controller and line offset, which
+avoids the legacy sysfs numbering entirely. It uses libgpiod (`gpioset`) when
+available and falls back to sysfs. Both libgpiod v1 and v2 command syntaxes are
+detected automatically. On a Pi 5 the script uses `gpiochip4`.
 
 If your carrier uses a different reset line, override it without editing the
 profile:
@@ -135,10 +137,14 @@ export SX1302_RESET_GPIO=23
 If the reset script reports a permission error, re-check the `gpio` group and
 make sure you are not relying on an old login session.
 
-> **libgpiod note:** the script uses the libgpiod v1 `gpioset <chip> <line>=<value>`
-> syntax used by the RAK reference script. Some newer distributions ship
-> libgpiod v2, whose syntax is `gpioset -c <chip> <line>=<value>`. Check
-> `gpioset --version` and adjust the script if your system uses v2.
+> **libgpiod note:** the script supports both the libgpiod v1 syntax
+> (`gpioset <chip> <line>=<value>`) and the v2 syntax
+> (`gpioset -c <chip> <line>=<value>`). It checks `gpioset --version` and picks
+> the matching form.
+
+If the script fails, it prints the current `gpioinfo` entry for the line. A
+consumer name other than `unused` means a kernel driver or overlay already owns
+the pin.
 
 ## 5. First hardware run: start and listen
 
@@ -299,7 +305,8 @@ the same concentrator concurrently.
 | `tx_power is below the TX gain LUT minimum` | TX power below the first LUT entry | Use at least 12 dBm with the RAK2287 EU868 LUT. |
 | `lgw_send failed` or TX timeout | Radio still emitting, or TX path not ready | Retry; check antenna and power; make sure only one process uses the HAL. |
 | No packets received | PHY mismatch, sync word mismatch, CRC disabled, or antenna issue | Match frequency, BW, SF, CR, private sync word, explicit header, CRC, and preamble on both nodes. |
-| Reset script fails on Pi 5 | GPIO chip or libgpiod syntax changed | The script uses `gpiochip4`; verify `gpioset --version` and adapt the v1 syntax if needed. |
+| `reset_rak2287.sh: line N: printf: write error: Invalid argument` | Legacy sysfs path used the bare BCM number, which is not a valid global GPIO number on Pi 5 / newer kernels | Update the script; it now uses libgpiod with `gpiochip4` on a Pi 5. If you copied the old script, set `SX1302_GPIO_CHIP=gpiochip4`. |
+| Reset script fails on Pi 5 | Wrong GPIO chip, libgpiod not installed, or pin claimed by an overlay | The script uses `gpiochip4` and both libgpiod syntaxes; check `gpioinfo gpiochip4` for the consumer. |
 | `libloragw.so not found` | HAL not built or wrong working directory | Run `./scripts/build_hal.sh` or set `SX1302_HAL_LIB=/path/to/libloragw.so`. |
 | Temperature is always 25.0 C | No STTS751 on the board | Expected with the optional-sensor patch. |
 
@@ -315,7 +322,8 @@ gpioinfo
 
 - The GPIO controller is `gpiochip4` rather than `gpiochip0`; the reset script
   detects this.
-- Sysfs GPIO is generally unavailable; the script falls back to `gpioset`.
+- Sysfs GPIO is often unavailable or uses offset global numbers; the script
+  drives the line through `gpioset` instead.
 - Use a 64-bit Raspberry Pi OS. A 32-bit userland works but is not the primary
   test target.
 - SPI device numbering is unchanged (`/dev/spidev0.0`).
