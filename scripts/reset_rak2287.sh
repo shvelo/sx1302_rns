@@ -109,15 +109,17 @@ if [[ ! -e "/dev/${GPIO_CHIP}" ]]; then
     exit 1
 fi
 
-# gpioset's hold-period mode does not exit on its own, so drive the whole pulse
-# with one toggle sequence. SX1302 NRESET is active low: start high, drive it
-# low for one wait, then release it high again and exit on the trailing 0
-# period. Ending high matters; leaving the line low holds the SX1302 in reset.
+# The RAK2287 exposes an active-high SX1302 reset input: high asserts reset,
+# low lets the chip run. gpioset's toggle sequence starts at the given value,
+# toggles after each period, and exits when the next period is 0. Starting at 0
+# therefore gives low -> high -> low, ending in the run state.
 gpioset_pulse() {
-    gpioset -t "${WAIT_MS}ms,${WAIT_MS}ms,0" -c "$GPIO_CHIP" "${GPIO}=1"
+    gpioset -t "${WAIT_MS}ms,${WAIT_MS}ms,0" -c "$GPIO_CHIP" "${GPIO}=0"
 }
 
 if gpioset_pulse; then
+    # Let the SX1302 finish booting before the HAL opens SPI.
+    sleep "$WAIT"
     exit 0
 fi
 

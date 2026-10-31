@@ -160,6 +160,9 @@ make sure you are not relying on an old login session.
 >
 > `SX1302_RESET_WAIT` is in seconds. The script converts it to integer
 > milliseconds because v2 does not accept fractional periods.
+>
+> The RAK2287's SX1302 reset input is **active high**: the script drives it
+> high for one wait period to assert reset, then low again to let the chip run.
 
 If the script fails, it prints the current `gpioinfo` entry for the line. A
 consumer name other than `unused` means a kernel driver or overlay already owns
