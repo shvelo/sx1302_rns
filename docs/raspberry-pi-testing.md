@@ -9,8 +9,9 @@ RAK2287 (SX1302 + SX1250) before the Reticulum interface exists.
 
 ## 1. What you need
 
-- A Raspberry Pi 3, 4, or 5. A 64-bit Raspberry Pi OS (Bookworm or newer) is
-  recommended.
+- A Raspberry Pi 3, 4, or 5. A 64-bit Raspberry Pi OS (Trixie or newer) is
+  recommended. On Bookworm, install `gpiod` from `bookworm-backports` so the
+  reset script gets libgpiod v2.
 - A RAK2287 module and a carrier that exposes it over SPI. The RAK Raspberry Pi
   HAT uses `/dev/spidev0.0` and GPIO 17 for SX1302 reset.
 - A **connected antenna or dummy load before any transmission.** Never run a
@@ -32,6 +33,15 @@ sudo apt update
 sudo apt full-upgrade -y
 sudo apt install -y git build-essential python3-venv python3-pip gpiod i2c-tools
 ```
+
+On Bookworm, `gpiod` is libgpiod v1. The reset script needs v2, so install it
+from backports after enabling `bookworm-backports`:
+
+```bash
+sudo apt install -t bookworm-backports gpiod
+```
+
+Check the version with `gpioset --version`. Trixie and newer already ship v2.
 
 Enable SPI, and optionally I2C:
 
@@ -116,10 +126,9 @@ Test it manually first:
 ./scripts/reset_rak2287.sh start
 ```
 
-The script addresses the reset line by GPIO controller and line offset, which
-avoids the legacy sysfs numbering entirely. It uses libgpiod (`gpioset`) when
-available and falls back to sysfs. Both libgpiod v1 and v2 command syntaxes are
-detected automatically. On a Pi 5 the script uses `gpiochip4`.
+The script addresses the reset line by GPIO controller and line offset through
+libgpiod v2, which avoids the legacy sysfs numbering entirely. On a Pi 5 the
+script uses `gpiochip4`.
 
 If your carrier uses a different reset line, override it without editing the
 profile:
@@ -137,10 +146,12 @@ export SX1302_RESET_GPIO=23
 If the reset script reports a permission error, re-check the `gpio` group and
 make sure you are not relying on an old login session.
 
-> **libgpiod note:** the script supports both the libgpiod v1 syntax
-> (`gpioset <chip> <line>=<value>`) and the v2 syntax
-> (`gpioset -c <chip> <line>=<value>`). It checks `gpioset --version` and picks
-> the matching form.
+> **libgpiod requirement:** the script requires libgpiod v2 (`gpioset` with
+> `--hold-period`). Raspberry Pi OS Trixie and newer ship it. On Bookworm,
+> install `gpiod` from backports as shown in section 2.
+>
+> `SX1302_RESET_WAIT` is in seconds. The script converts it to integer
+> milliseconds because v2 does not accept fractional periods.
 
 If the script fails, it prints the current `gpioinfo` entry for the line. A
 consumer name other than `unused` means a kernel driver or overlay already owns
@@ -305,8 +316,8 @@ the same concentrator concurrently.
 | `tx_power is below the TX gain LUT minimum` | TX power below the first LUT entry | Use at least 12 dBm with the RAK2287 EU868 LUT. |
 | `lgw_send failed` or TX timeout | Radio still emitting, or TX path not ready | Retry; check antenna and power; make sure only one process uses the HAL. |
 | No packets received | PHY mismatch, sync word mismatch, CRC disabled, or antenna issue | Match frequency, BW, SF, CR, private sync word, explicit header, CRC, and preamble on both nodes. |
-| `reset_rak2287.sh: line N: printf: write error: Invalid argument` | Legacy sysfs path used the bare BCM number, which is not a valid global GPIO number on Pi 5 / newer kernels | Update the script; it now uses libgpiod with `gpiochip4` on a Pi 5. If you copied the old script, set `SX1302_GPIO_CHIP=gpiochip4`. |
-| Reset script fails on Pi 5 | Wrong GPIO chip, libgpiod not installed, or pin claimed by an overlay | The script uses `gpiochip4` and both libgpiod syntaxes; check `gpioinfo gpiochip4` for the consumer. |
+| `gpioset: unrecognized option '--mode=wait'` or `invalid option -- 'p'` | libgpiod v1 or an old reset script | Install libgpiod v2 (`gpiod`), update the script, and check `gpioset --version`. |
+| Reset script fails on Pi 5 | Wrong GPIO chip, libgpiod missing, or pin claimed by an overlay | The script uses `gpiochip4` and libgpiod v2; check `gpioinfo gpiochip4` for the consumer. |
 | `libloragw.so not found` | HAL not built or wrong working directory | Run `./scripts/build_hal.sh` or set `SX1302_HAL_LIB=/path/to/libloragw.so`. |
 | Temperature is always 25.0 C | No STTS751 on the board | Expected with the optional-sensor patch. |
 
@@ -323,7 +334,7 @@ gpioinfo
 - The GPIO controller is `gpiochip4` rather than `gpiochip0`; the reset script
   detects this.
 - Sysfs GPIO is often unavailable or uses offset global numbers; the script
-  drives the line through `gpioset` instead.
+  drives the line through libgpiod v2 instead.
 - Use a 64-bit Raspberry Pi OS. A 32-bit userland works but is not the primary
   test target.
 - SPI device numbering is unchanged (`/dev/spidev0.0`).
