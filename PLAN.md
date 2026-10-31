@@ -1,7 +1,7 @@
 # SX1302 Reticulum Interface — Implementation Plan
 
-Status: Phase 1 implemented; Phase 2 hardware bring-up next  
-Date: 2026-10-30  
+Status: Phases 0–2 complete; Phase 3 (interface core) next  
+Date: 2026-10-31  
 Baseline: Semtech `sx1302_hal` v2.1.0 (now vendored under `vendor/sx1302_hal/`)  
 Reference: [`SX1302_RETICULUM_FINDINGS.md`](SX1302_RETICULUM_FINDINGS.md)
 
@@ -227,9 +227,26 @@ Exit criteria:
 
 ### Phase 2 — Hardware bring-up
 
+Status: **complete** (2026-10-31).
+
+Validated hardware and configuration:
+
+- RAK2287 (SX1302 + SX1250, SPI version) on a RAK2004 Pi HAT Ver B.
+- SX1302 reset is GPIO 25 on this HAT and the reset input is **active high**
+  (low → high pulse → low, then settle).
+- SPI `/dev/spidev0.0`; HAL v2.1.0 built as `build/libloragw.so`.
+- EU868: 868.1 MHz, BW 125 kHz, SF9, CR 4/5, 14 dBm, service channel
+  (IF chain 8), private sync word.
+- `lgw_start()` succeeds with the optional temperature-sensor patch. The
+  RAK2287 has no STTS751, so the HAL reports 25.0 °C.
+- One board transmitted; a second node received and decoded the payload.
+
+The working profile is `examples/rak2287-eu868.conf`; it sets
+`reset_gpio = 25` so no environment override is required.
+
 Tasks:
 
-1. Define a board profile (`examples/board.conf`) covering:
+1. Define a board profile (`examples/rak2287-eu868.conf`) covering:
    - SPI path, radio type, RF chain, TX LUT, RSSI offset/compensation,
      single-input mode, reset script, and GPIO ownership.
 2. Implement `scripts/smoke_test.py`:
