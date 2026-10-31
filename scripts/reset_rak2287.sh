@@ -136,20 +136,10 @@ GPIO_SET_MAJOR=""
 gpioset_hold() {
     local level="$1" pid
     if [[ "$GPIO_SET_MAJOR" == "2" ]]; then
-        gpioset --mode=wait -c "$GPIO_CHIP" "${GPIO}=${level}" &
+        gpioset -p "$WAIT""s" -c "$GPIO_CHIP" "${GPIO}=${level}" &
     else
-        gpioset --mode=wait "$GPIO_CHIP" "${GPIO}=${level}" &
+        gpioset -p "$WAIT""s" "$GPIO_CHIP" "${GPIO}=${level}" &
     fi
-    pid=$!
-
-    sleep "$WAIT"
-    if ! kill -0 "$pid" 2>/dev/null; then
-        wait "$pid" 2>/dev/null || true
-        return 1
-    fi
-
-    kill -TERM "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
 }
 
 gpioset_pulse() {
