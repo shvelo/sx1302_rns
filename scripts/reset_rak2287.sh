@@ -136,9 +136,9 @@ GPIO_SET_MAJOR=""
 gpioset_hold() {
     local level="$1" pid
     if [[ "$GPIO_SET_MAJOR" == "2" ]]; then
-        gpioset -p "$WAIT""ms" -c "$GPIO_CHIP" "${GPIO}=${level}" &
+        gpioset -p "$WAIT""ms" -c "$GPIO_CHIP" "${GPIO}=${level}"
     else
-        gpioset -p "$WAIT""ms" "$GPIO_CHIP" "${GPIO}=${level}" &
+        gpioset -p "$WAIT""ms" "$GPIO_CHIP" "${GPIO}=${level}"
     fi
 }
 
