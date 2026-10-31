@@ -110,11 +110,11 @@ if [[ ! -e "/dev/${GPIO_CHIP}" ]]; then
 fi
 
 # gpioset's hold-period mode does not exit on its own, so drive the whole pulse
-# with one toggle sequence: start low, go high after one wait, go low after the
-# next, then 0 tells gpioset to stop and exit. The carrier's pull-down keeps the
-# SX1302 out of reset after the line is released.
+# with one toggle sequence. SX1302 NRESET is active low: start high, drive it
+# low for one wait, then release it high again and exit on the trailing 0
+# period. Ending high matters; leaving the line low holds the SX1302 in reset.
 gpioset_pulse() {
-    gpioset -t "${WAIT_MS}ms,${WAIT_MS}ms,0" -c "$GPIO_CHIP" "${GPIO}=0"
+    gpioset -t "${WAIT_MS}ms,${WAIT_MS}ms,0" -c "$GPIO_CHIP" "${GPIO}=1"
 }
 
 if gpioset_pulse; then
