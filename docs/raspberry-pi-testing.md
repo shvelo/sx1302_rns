@@ -147,8 +147,8 @@ If the reset script reports a permission error, re-check the `gpio` group and
 make sure you are not relying on an old login session.
 
 > **libgpiod requirement:** the script requires libgpiod v2 (`gpioset` with
-> `--hold-period`). Raspberry Pi OS Trixie and newer ship it. On Bookworm,
-> install `gpiod` from backports as shown in section 2.
+> `--toggle`). Raspberry Pi OS Trixie and newer ship it. On Bookworm, install
+> `gpiod` from backports as shown in section 2.
 >
 > `SX1302_RESET_WAIT` is in seconds. The script converts it to integer
 > milliseconds because v2 does not accept fractional periods.
@@ -316,7 +316,7 @@ the same concentrator concurrently.
 | `tx_power is below the TX gain LUT minimum` | TX power below the first LUT entry | Use at least 12 dBm with the RAK2287 EU868 LUT. |
 | `lgw_send failed` or TX timeout | Radio still emitting, or TX path not ready | Retry; check antenna and power; make sure only one process uses the HAL. |
 | No packets received | PHY mismatch, sync word mismatch, CRC disabled, or antenna issue | Match frequency, BW, SF, CR, private sync word, explicit header, CRC, and preamble on both nodes. |
-| `gpioset: unrecognized option '--mode=wait'` or `invalid option -- 'p'` | libgpiod v1 or an old reset script | Install libgpiod v2 (`gpiod`), update the script, and check `gpioset --version`. |
+| `gpioset: unrecognized option '--mode=wait'` or `invalid option -- 't'` | libgpiod v1 or an old reset script | Install libgpiod v2 (`gpiod`), update the script, and check `gpioset --version`. |
 | Reset script fails on Pi 5 | Wrong GPIO chip, libgpiod missing, or pin claimed by an overlay | The script uses `gpiochip4` and libgpiod v2; check `gpioinfo gpiochip4` for the consumer. |
 | `libloragw.so not found` | HAL not built or wrong working directory | Run `./scripts/build_hal.sh` or set `SX1302_HAL_LIB=/path/to/libloragw.so`. |
 | Temperature is always 25.0 C | No STTS751 on the board | Expected with the optional-sensor patch. |
