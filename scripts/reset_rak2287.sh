@@ -2,8 +2,9 @@
 #
 # Reset the SX1302 on a RAK2287 carrier.
 #
-# The RAK2287 Raspberry Pi HAT uses GPIO 17 for SX1302 reset. Other carriers
-# may use a different line; set SX1302_RESET_GPIO or edit this script.
+# Most RAK2287 Raspberry Pi HATs use GPIO 17 for SX1302 reset. RAK2004 Pi HAT
+# Ver B (and some Helium miner carriers) use GPIO 25. Other carriers may use a
+# different line; set SX1302_RESET_GPIO or edit this script.
 #
 # The line is addressed by GPIO controller and line offset through libgpiod v2,
 # which avoids the legacy sysfs global numbering. On Raspberry Pi 5 the header

@@ -12,8 +12,9 @@ RAK2287 (SX1302 + SX1250) before the Reticulum interface exists.
 - A Raspberry Pi 3, 4, or 5. A 64-bit Raspberry Pi OS (Trixie or newer) is
   recommended. On Bookworm, install `gpiod` from `bookworm-backports` so the
   reset script gets libgpiod v2.
-- A RAK2287 module and a carrier that exposes it over SPI. The RAK Raspberry Pi
-  HAT uses `/dev/spidev0.0` and GPIO 17 for SX1302 reset.
+- A RAK2287 module and a carrier that exposes it over SPI. Most RAK Raspberry Pi
+  HATs use `/dev/spidev0.0` and GPIO 17 for SX1302 reset; the RAK2004 Pi HAT
+  Ver B uses GPIO 25.
 - A **connected antenna or dummy load before any transmission.** Never run a
   TX test with an open RF connector.
 - A second LoRa node for receive/transmit verification. The easiest option is a
@@ -118,7 +119,14 @@ They should all pass without a radio attached.
 ## 4. Confirm the reset line
 
 The example profile runs `scripts/reset_rak2287.sh start` before loading the
-HAL. The script defaults to GPIO 17, the RAK2287 Pi HAT reset line.
+HAL. The script defaults to GPIO 17, the reset line on most RAK2287 Pi HATs.
+
+**Check your HAT revision.** The RAK2004 Pi HAT Ver B and some Helium miner
+carriers route the SX1302 reset to **GPIO 25** instead. If the HAL reports
+`chip version is 0x05 (v0.5)` followed by
+`Failed to set SX1250_0 in STANDBY_RC mode`, the reset pulse is not reaching the
+SX1302. Fully power-cycle the Pi (unplug power for about 10 seconds), then
+retry with GPIO 25.
 
 Test it manually first:
 
@@ -134,13 +142,13 @@ If your carrier uses a different reset line, override it without editing the
 profile:
 
 ```bash
-SX1302_RESET_GPIO=23 ./scripts/reset_rak2287.sh start
+SX1302_RESET_GPIO=25 ./scripts/reset_rak2287.sh start
 ```
 
 To keep an override for every run, export it before the smoke test:
 
 ```bash
-export SX1302_RESET_GPIO=23
+export SX1302_RESET_GPIO=25
 ```
 
 If the reset script reports a permission error, re-check the `gpio` group and
@@ -309,7 +317,8 @@ the same concentrator concurrently.
 |---|---|---|
 | `Permission denied: /dev/spidev0.0` | User not in `spi` group, or old login | Add the group and log out/in; check `id`. |
 | `/dev/spidev0.0` missing | SPI disabled | Run `sudo raspi-config nonint do_spi 0` and reboot. |
-| `chip version is 0x00` or `Failed to set SX1250 in STANDBY_RC` | No SPI response, bad reset, poor power, or HAT not seated | Reseat the module, check 5 V supply, run the reset script, confirm GPIO 17 with `gpioinfo`. |
+| `chip version is 0x05 (v0.5)` and `Failed to set SX1250_0 in STANDBY_RC mode` | Reset pulse is not reaching the SX1302; on a RAK2004 Pi HAT Ver B the reset is GPIO 25, not 17 | Power-cycle the Pi, then run with `SX1302_RESET_GPIO=25`. If that fails, check the HAT schematic and confirm the line with `gpioinfo`. |
+| `chip version is 0x00` or `Failed to set SX1250 in STANDBY_RC` | No SPI response, bad reset, poor power, or HAT not seated | Reseat the module, check 5 V supply, run the reset script, and confirm the reset GPIO with `gpioinfo`. |
 | `lgw_start failed with status -1` | HAL rejected the board configuration | Read the HAL lines above the error; check SPI path, radio type, RF chain, LUT, and reset. |
 | `lgw_board_setconf failed` | Invalid board profile value | Re-check `[board]`; `clksrc` must be 0 or 1 and the SPI path must be valid. |
 | `txgain` or LUT error | Missing, unsorted, or out-of-range entries | Keep entries sorted by `rf_power`; `pwr_idx` is 0-22 and `mix_gain` is 5-15 for this profile. |
