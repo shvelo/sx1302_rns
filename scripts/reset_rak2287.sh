@@ -17,7 +17,7 @@
 # Environment overrides:
 #   SX1302_RESET_GPIO   line offset within the controller (default 17)
 #   SX1302_GPIO_CHIP    gpiochip name, e.g. gpiochip0 or gpiochip4
-#   SX1302_RESET_WAIT   seconds to hold each level (default 0.1)
+#   SX1302_RESET_WAIT   milliseconds to hold each level (default 0.1)
 #
 # This script intentionally does not touch a power-enable line. The RAK2287
 # module is powered by its carrier.
@@ -27,7 +27,7 @@ set -euo pipefail
 ACTION="${1:-start}"
 GPIO="${SX1302_RESET_GPIO:-17}"
 GPIO_CHIP="${SX1302_GPIO_CHIP:-}"
-WAIT="${SX1302_RESET_WAIT:-0.1}"
+WAIT="${SX1302_RESET_WAIT:-100}"
 
 usage() {
     printf 'usage: %s {start|stop}\n' "$(basename "$0")" >&2
@@ -136,9 +136,9 @@ GPIO_SET_MAJOR=""
 gpioset_hold() {
     local level="$1" pid
     if [[ "$GPIO_SET_MAJOR" == "2" ]]; then
-        gpioset -p "$WAIT""s" -c "$GPIO_CHIP" "${GPIO}=${level}" &
+        gpioset -p "$WAIT""ms" -c "$GPIO_CHIP" "${GPIO}=${level}" &
     else
-        gpioset -p "$WAIT""s" "$GPIO_CHIP" "${GPIO}=${level}" &
+        gpioset -p "$WAIT""ms" "$GPIO_CHIP" "${GPIO}=${level}" &
     fi
 }
 
