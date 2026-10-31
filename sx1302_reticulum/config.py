@@ -133,6 +133,7 @@ class BoardProfile:
     reset_start_args: tuple[str, ...]
     reset_stop_args: tuple[str, ...]
     reset_enabled: bool
+    reset_gpio: int | None
 
     @classmethod
     def from_ini(cls, path: str | Path) -> "BoardProfile":
@@ -185,6 +186,11 @@ class BoardProfile:
         )
         if reset_enabled and reset_script is None:
             raise ConfigError("[board] reset_script is required unless reset_enabled = no")
+
+        reset_gpio_raw = parser.get("board", "reset_gpio", fallback="").strip()
+        reset_gpio = None
+        if reset_gpio_raw:
+            reset_gpio = _int(reset_gpio_raw, "board.reset_gpio")
 
         start_args = tuple(shlex.split(_get(parser, "board", "reset_start_args", "start")))
         stop_args = tuple(shlex.split(_get(parser, "board", "reset_stop_args", "stop")))
@@ -249,6 +255,7 @@ class BoardProfile:
             reset_start_args=start_args,
             reset_stop_args=stop_args,
             reset_enabled=reset_enabled,
+            reset_gpio=reset_gpio,
         )
         profile._validate()
         return profile
@@ -260,6 +267,8 @@ class BoardProfile:
             raise ConfigError(f"reset script does not exist: {self.reset_script}")
         if self.reset_start_args == () or self.reset_stop_args == ():
             raise ConfigError("reset argument lists must not be empty")
+        if self.reset_gpio is not None and not 0 <= self.reset_gpio <= 53:
+            raise ConfigError("[board] reset_gpio must be between 0 and 53")
         if self.channel_mode == "service" and self.if_frequency != 0:
             raise ConfigError("[channel] if_frequency must be 0 in service mode")
         if self.tx_gain_lut and self.tx_power < min(entry.rf_power for entry in self.tx_gain_lut):
@@ -397,6 +406,17 @@ class BoardProfile:
         if action == "stop":
             return [str(self.reset_script), *self.reset_stop_args]
         raise ValueError(f"unknown reset action: {action}")
+
+    def reset_env(self) -> dict[str, str]:
+        """Extra environment for the reset script.
+
+        The reset script reads the line offset from SX1302_RESET_GPIO, so the
+        board profile can pin it without requiring a wrapper or an exported
+        variable.
+        """
+        if not self.reset_enabled or self.reset_gpio is None:
+            return {}
+        return {"SX1302_RESET_GPIO": str(self.reset_gpio)}
 
 
 def _parse_tx_gain_lut(parser: ConfigParser) -> tuple[TxGainEntry, ...]:

@@ -11,6 +11,7 @@ It does not require Reticulum and does not start any daemon.
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -40,7 +41,12 @@ def _run_reset(profile: BoardProfile, action: str) -> None:
         print(f"Reset {action}: skipped (disabled in board profile)")
         return
     print(f"Reset {action}: {' '.join(command)}")
-    result = subprocess.run(command)
+    env = os.environ.copy()
+    for key, value in profile.reset_env().items():
+        env.setdefault(key, value)
+    if "SX1302_RESET_GPIO" in env:
+        print(f"Reset GPIO: {env['SX1302_RESET_GPIO']}")
+    result = subprocess.run(command, env=env)
     if result.returncode != 0:
         raise RuntimeError(f"reset script failed with exit code {result.returncode}")
 
