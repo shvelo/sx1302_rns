@@ -365,17 +365,19 @@ Tasks:
 3. Add an example Reticulum stanza:
 
    ```ini
-   [[SX1302 LoRa]]
-     type = SX1302
-     interface_enabled = yes
-     frequency = 868100000
-     bandwidth = 125000
-     spreadingfactor = 8
-     codingrate = 5
-     txpower = 14
-     spi_path = /dev/spidev0.0
-     reset_script = /path/to/reset_lgw.sh
-     board_profile = /path/to/board.conf
+   [interfaces]
+
+     [[SX1302 LoRa]]
+       type = SX1302
+       enabled = yes
+       board_profile = /path/to/board.conf
+       frequency = 868100000
+       bandwidth = 125000
+       spreadingfactor = 9
+       codingrate = 5
+       txpower = 14
+       spi_path = /dev/spidev0.0
+       reset_script = /path/to/reset_lgw.sh
    ```
 
 4. Pin and document a tested Reticulum version.
@@ -389,6 +391,23 @@ Exit criteria:
 - Startup failure is visible and does not crash Reticulum.
 
 ### Phase 5 — End-to-end validation and hardening
+
+Status: **in progress** (2026-11-01).
+
+Validated so far on the RAK2287 / Raspberry Pi:
+
+- Reticulum 1.5.7 loads the external shim and brings the interface online.
+  `rnstatus` reports `SX1302Interface[SX1302 LoRa]`, Status Up, Mode Full,
+  MTU 254, and 1.76 kbps.
+- The transmit path was exercised through real Reticulum with a shared
+  instance and an external `rnpath` client: a path request reached
+  `process_outgoing()` and was submitted to the worker. The same check is
+  documented in the Pi guide.
+- Idle traffic stays at zero until Reticulum has a packet to send, so no
+  announces are expected without a peer.
+
+Still required: a second Reticulum node for announce/path/link tests in both
+directions, fragmentation, restart and soak testing.
 
 Tasks:
 

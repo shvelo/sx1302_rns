@@ -332,6 +332,27 @@ Expected:
 Reticulum and the smoke test cannot run at the same time: the HAL has global
 state and only one process can claim the concentrator.
 
+### Confirm transmit without a peer
+
+Reticulum only calls `process_outgoing()` when it has a packet to send, so a
+newly started node with no peers legitimately shows `↑0 B`. To exercise the
+transmit path, ask for a path to a destination hash that does not exist.
+Reticulum broadcasts the path request on every interface:
+
+```bash
+rnpath -w 3 00112233445566778899aabbccddeeff
+rnstatus
+```
+
+`rnpath` prints `Path not found` and exits non-zero, which is expected. The
+SX1302 interface should now show roughly 50-70 bytes transmitted; the exact
+size depends on whether the instance is a transport node. The frame is
+broadcast on air, so do not loop this command: EU868 has a 1% duty cycle.
+
+This exercises the same path a real packet uses. The CLI client connects to the
+running shared instance, and the instance hands the frame to
+`SX1302Interface.process_outgoing()`.
+
 ## 9. Suggested test order
 
 Run these in order and stop at the first failure:
