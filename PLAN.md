@@ -430,6 +430,18 @@ Exit criteria:
 
 ### Phase 6 — Packaging and documentation
 
+Status: **in progress** (2026-11-01).
+
+Implemented so far:
+
+- `scripts/setup_pi.sh` automates the Pi setup: system packages, SPI/I2C,
+  device groups, the virtual environment, the editable package install, the
+  patched HAL build, the unit tests, and the Reticulum shim installation. It
+  is idempotent, supports skipping individual steps, and prints the stanza to
+  add plus the first hardware checks.
+- `tests/test_setup_script.py` checks the script's syntax, help text, and
+  argument handling without touching the system.
+
 Tasks:
 
 1. Finalize `README.md`, board profiles, and configuration reference.

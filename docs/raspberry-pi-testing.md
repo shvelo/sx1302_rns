@@ -89,6 +89,29 @@ cd sx1302_rns
 git checkout feature/reticulum-sx1302-interface
 ```
 
+### Automated setup
+
+`scripts/setup_pi.sh` performs the steps in sections 2 and 3 for you: it
+installs system packages, enables SPI and I2C, adds your user to the `spi`,
+`gpio`, and `i2c` groups, creates `.venv`, installs the package and Reticulum,
+builds the patched HAL, runs the unit tests, and installs the Reticulum shim.
+
+```bash
+./scripts/setup_pi.sh
+```
+
+Run it as your normal user, not with `sudo`; it uses `sudo` for the system
+steps. If it changed SPI/I2C or group membership, reboot or log out and back
+in, check `/dev/spidev0.0`, then re-run with `--skip-system`. Use `--skip-build`,
+`--skip-tests`, `--skip-system`, or `--skip-interface` to skip individual
+steps, and `--configdir` if your Reticulum configuration is not in
+`~/.reticulum`.
+
+The script prints the Reticulum stanza to add and the commands for the first
+hardware test. The rest of this section describes the manual equivalent.
+
+### Manual setup
+
 Create a virtual environment and install the package, Reticulum, and pytest:
 
 ```bash

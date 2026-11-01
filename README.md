@@ -53,6 +53,19 @@ vendor/sx1302_hal/     Upstream Semtech sx1302_hal v2.1.0
 ## Quick start
 
 ```bash
+git clone https://github.com/shvelo/sx1302_rns.git
+cd sx1302_rns
+./scripts/setup_pi.sh
+```
+
+On a Raspberry Pi the script installs the system packages, enables SPI/I2C,
+creates `.venv`, builds the patched HAL, runs the tests, and installs the
+Reticulum shim. It prints the stanza to add and the commands for the first
+hardware test.
+
+For the manual equivalent:
+
+```bash
 python3 -m venv .venv
 . .venv/bin/activate
 python3 -m pip install -e . pytest
