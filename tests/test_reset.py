@@ -80,6 +80,16 @@ def test_failed_reset_raises(write_profile, tmp_path):
         run_reset(profile, "start")
 
 
+def test_hung_reset_times_out(write_profile, tmp_path):
+    script = tmp_path / "reset.sh"
+    script.write_text("#!/bin/sh\nsleep 2\n")
+    script.chmod(0o755)
+    profile = _profile_with_script(write_profile, tmp_path, script, 25)
+
+    with pytest.raises(ResetError, match="timed out"):
+        run_reset(profile, "start", timeout=0.05)
+
+
 def test_disabled_reset_does_nothing(write_profile):
     profile = BoardProfile.from_ini(write_profile())
 

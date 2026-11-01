@@ -291,8 +291,8 @@ Implemented:
   `tests/test_interface.py`, including a fake HAL that records thread IDs to
   prove no HAL call happens outside the worker thread.
 
-Test result: 55 passed with Reticulum 1.5.7 installed; without RNS, the
-Reticulum-dependent tests are skipped (47 passed, 2 skipped).
+Test result: 56 passed with Reticulum 1.5.7 installed; without RNS, the
+Reticulum-dependent tests are skipped (48 passed, 2 skipped).
 
 Tasks:
 

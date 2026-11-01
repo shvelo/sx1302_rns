@@ -17,6 +17,7 @@ def run_reset(
     profile: BoardProfile,
     action: str,
     log: Callable[[str], None] | None = None,
+    timeout: float = 30.0,
 ) -> None:
     """Run ``profile``'s reset script for ``action``.
 
@@ -51,7 +52,12 @@ def run_reset(
             capture_output=True,
             text=True,
             check=False,
+            timeout=timeout,
         )
+    except subprocess.TimeoutExpired as exc:
+        raise ResetError(
+            f"reset script timed out after {timeout:g} s"
+        ) from exc
     except OSError as exc:
         raise ResetError(f"could not run reset script: {exc}") from exc
 
