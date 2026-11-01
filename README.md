@@ -8,10 +8,12 @@ for Reticulum. It does **not** run a packet forwarder, does not speak GWMP, and
 does not emulate RNode KISS. Instead, a Reticulum external interface loads the
 SX1302 HAL as a shared library through `ctypes` and drives the radio directly.
 
-> **Status:** Phase 1 complete. The upstream Semtech source is vendored, the
-> patched shared HAL builds as `build/libloragw.so`, and the ctypes ABI is
-> verified. Phase 2 bring-up scaffolding is in place; hardware validation is
-> pending. See [`PLAN.md`](PLAN.md) and the
+> **Status:** Phases 1–4 implemented. The upstream Semtech source is vendored,
+> the patched shared HAL builds as `build/libloragw.so`, the ctypes ABI is
+> verified, hardware TX/RX is validated on a RAK2287, the hardware-independent
+> interface core is tested against Reticulum 1.5.7, and Reticulum's external
+> loader has been verified in-process with a fake HAL. Live `rnsd`/`rnping`
+> validation on hardware is next. See [`PLAN.md`](PLAN.md) and the
 > [Raspberry Pi test guide](docs/raspberry-pi-testing.md).
 
 ## Documentation
@@ -30,7 +32,7 @@ SX1302 HAL as a shared library through `ctypes` and drives the radio directly.
 ## Repository layout
 
 ```text
-interfaces/            Reticulum external interface module (planned)
+interfaces/            Reticulum external interface shim (SX1302.py)
 sx1302_reticulum/      Python package: config, ctypes HAL, worker, interface
 patches/               Minimal source patches applied during the HAL build
 scripts/               Build, ABI check, smoke test, install helpers
@@ -40,26 +42,30 @@ docs/                  Hardware bring-up and operator documentation
 vendor/sx1302_hal/     Upstream Semtech sx1302_hal v2.1.0
 ```
 
-## Requirements (planned)
+## Requirements
 
 - Linux host with SPI, I2C, and GPIO access.
 - An SX1302 concentrator board with one or more SX1250 radios.
 - Python 3.9+.
-- A Reticulum installation (version to be pinned).
+- Reticulum 1.5.7 (pinned in `pyproject.toml`).
 - A board-specific TX gain LUT and reset/power configuration.
 
 ## Quick start
 
-This is not usable yet. The intended flow after implementation is:
-
 ```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python3 -m pip install -e . pytest
+
 ./scripts/build_hal.sh
-./scripts/smoke_test.py --config examples/board.conf
-./scripts/install_interface.sh
+./scripts/smoke_test.py --config examples/rak2287-eu868.conf --rx-only
+./scripts/install_interface.sh --editable
 ```
 
-Then enable a `type = SX1302` stanza in the Reticulum configuration. See
-`PLAN.md` for the full sequence.
+Then add a `type = SX1302` stanza under `[interfaces]` in your Reticulum
+configuration; see `examples/reticulum-sx1302.conf`. The stanza needs the path
+to a board profile such as `examples/rak2287-eu868.conf`. See `PLAN.md` and the
+[Pi guide](docs/raspberry-pi-testing.md) for the full sequence.
 
 ## Important limitations
 
@@ -69,7 +75,8 @@ Then enable a `type = SX1302` stanza in the Reticulum configuration. See
 - There is no built-in CSMA/CAD or duty-cycle enforcement. Operators are
   responsible for regional airtime rules.
 - The HAL TX payload limit is 255 bytes, so the interface advertises a
-  254-byte hardware MTU and relies on Reticulum fragmentation.
+  254-byte hardware MTU and relies on Reticulum fragmentation. If IFAC is
+  enabled, 16 bytes are reserved for the IFAC tag and the effective MTU is 238.
 - Board support is hardware-specific: temperature sensor, reset GPIOs, and TX
   gain LUT must match the actual board.
 

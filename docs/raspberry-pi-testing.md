@@ -89,13 +89,17 @@ cd sx1302_rns
 git checkout feature/reticulum-sx1302-interface
 ```
 
-Create a virtual environment and install the test dependency:
+Create a virtual environment and install the package, Reticulum, and pytest:
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-python3 -m pip install --upgrade pip pytest
+python3 -m pip install --upgrade pip
+python3 -m pip install -e . pytest
 ```
+
+The project pins Reticulum 1.5.7. The interface tests need it; tests that need
+hardware or RNS are skipped automatically when those are unavailable.
 
 Build the patched shared HAL. This copies the vendored tree to `build/`, applies
 `patches/*.patch`, compiles with `-fPIC`, links `build/libloragw.so`, and runs
@@ -284,7 +288,51 @@ The `lorawan_public = False` setting in the board profile selects the private
 LoRa sync word. If the transmitter uses the public LoRaWAN sync word (`0x34`),
 the receiver will not decode it.
 
-## 8. Suggested test order
+## 8. Run Reticulum with the interface
+
+The interface core and the Reticulum shim are unit tested, but run the full
+stack on the Pi before relying on it. From the environment created in section 3:
+
+```bash
+. .venv/bin/activate
+./scripts/install_interface.sh --editable
+```
+
+`install_interface.sh` symlinks `interfaces/SX1302.py` into
+`~/.reticulum/interfaces/` and installs an editable package so the shim's
+absolute import works.
+
+Add a stanza to `~/.reticulum/config` under the `[interfaces]` section. The
+full commented example is in `examples/reticulum-sx1302.conf`:
+
+```ini
+[interfaces]
+
+  [[SX1302 LoRa]]
+    type = SX1302
+    enabled = yes
+    board_profile = /home/pi/sx1302_hal/examples/rak2287-eu868.conf
+```
+
+Start Reticulum and inspect the interface:
+
+```bash
+rnsd -v
+rnstatus
+```
+
+Expected:
+
+- The interface appears as `SX1302 LoRa` and becomes online a few seconds
+  after startup, once `lgw_start()` finishes.
+- The hardware MTU is 254 bytes.
+- The on-air bitrate is about 1758 bit/s for BW 125 kHz, SF9, CR 4/5.
+- `rnstatus` counts RX/TX bytes and reports RSSI/SNR for received packets.
+
+Reticulum and the smoke test cannot run at the same time: the HAL has global
+state and only one process can claim the concentrator.
+
+## 9. Suggested test order
 
 Run these in order and stop at the first failure:
 
@@ -311,7 +359,7 @@ For 250 kHz or 500 kHz bandwidth use service mode (the default). The
 Only one process can use the HAL at a time. Do not run two smoke tests against
 the same concentrator concurrently.
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
@@ -338,7 +386,7 @@ ls -l /dev/spidev*
 gpioinfo
 ```
 
-## 10. Raspberry Pi 5 notes
+## 11. Raspberry Pi 5 notes
 
 - The GPIO controller is `gpiochip4` rather than `gpiochip0`; the reset script
   detects this.
@@ -348,16 +396,17 @@ gpioinfo
   test target.
 - SPI device numbering is unchanged (`/dev/spidev0.0`).
 
-## 11. What this does not validate yet
+## 12. What this does not validate yet
 
-- Reticulum loading the interface, `rnstatus`, or `rnping`. Those arrive with
-  the Phase 3/4 interface work.
+- Live Reticulum operation (`rnstatus`, `rnping`, `rnprobe`). The interface
+  core and the external shim are unit tested, but a hardware run is still
+  required to confirm startup, status output, and bidirectional traffic.
 - Runtime frequency/SF/BW changes. The radio is configured once per process.
 - CSMA/CAD or automatic duty-cycle enforcement. You are responsible for
   regional airtime rules.
 - Multiple SX1302 instances in one process. The HAL has global state.
 
-## 12. Recording a result
+## 13. Recording a result
 
 When a test passes or fails, capture:
 

@@ -1,7 +1,7 @@
 # SX1302 Reticulum Interface — Implementation Plan
 
-Status: Phases 0–2 complete; Phase 3 (interface core) next  
-Date: 2026-10-31  
+Status: Phases 0–3 complete; Phase 4 implemented and loader-verified; live hardware validation (Phase 5) next
+Date: 2026-11-01
 Baseline: Semtech `sx1302_hal` v2.1.0 (now vendored under `vendor/sx1302_hal/`)  
 Reference: [`SX1302_RETICULUM_FINDINGS.md`](SX1302_RETICULUM_FINDINGS.md)
 
@@ -272,6 +272,28 @@ Exit criteria:
 
 ### Phase 3 — Interface core
 
+Status: **complete** (2026-11-01).
+
+Implemented:
+
+- `sx1302_reticulum/reset.py`: shared reset runner with environment
+  propagation, captured output, and clear failure reporting.
+- `sx1302_reticulum/worker.py`: one radio thread owns every HAL call. It has a
+  bounded TX queue, RX polling, CRC and MTU filtering, TX-free and completion
+  polling with timeouts, counters, receive-error backoff, graceful shutdown,
+  and optional reset-script handling around `lgw_start()`/`lgw_stop()`.
+- `sx1302_reticulum/interface.py`: Reticulum 1.5.7 `Interface` subclass with
+  stanza overrides, `HW_MTU = 254`, fixed MTU, shared-medium and PHY-stat
+  reporting, `owner.inbound()` dispatch, `process_outgoing()`, and idempotent
+  `detach()`/`teardown()`.
+- `scripts/smoke_test.py` now uses the shared reset runner.
+- Tests: `tests/test_reset.py`, `tests/test_worker.py`, and
+  `tests/test_interface.py`, including a fake HAL that records thread IDs to
+  prove no HAL call happens outside the worker thread.
+
+Test result: 55 passed with Reticulum 1.5.7 installed; without RNS, the
+Reticulum-dependent tests are skipped (47 passed, 2 skipped).
+
 Tasks:
 
 1. Implement configuration parsing and validation:
@@ -303,6 +325,33 @@ Exit criteria:
 - Interface construction and teardown are deterministic.
 
 ### Phase 4 — Reticulum integration
+
+Status: **implemented** (2026-11-01); live `rnsd` validation pending.
+
+Implemented:
+
+- `interfaces/SX1302.py`: minimal shim with an absolute import and
+  `interface_class = SX1302Interface`. It works under Reticulum's `exec()`
+  contract, which supplies only `RNS` and `Interface` in globals.
+- `scripts/install_interface.sh`: symlinks the shim into
+  `<configdir>/interfaces/`, optionally installs the package in editable mode,
+  and warns when the active Python cannot import it.
+- `examples/reticulum-sx1302.conf`: commented `[[SX1302 LoRa]]` stanza with all
+  supported overrides.
+- `pyproject.toml`: installable package with Reticulum pinned to
+  `>=1.5.7,<1.6` (1.5.7 is the tested release).
+- `tests/test_shim.py`: executes the shim the way Reticulum does and verifies
+  it exposes the class; also checks the install helper's symlink behavior.
+
+Remaining for Phase 5: start `rnsd` on hardware, confirm `rnstatus` shows the
+interface online with the expected MTU, and run `rnping`/`rnprobe` both ways.
+
+Loader validation: RNS 1.5.7 was started in-process with a temporary
+`[interfaces]` configuration and a fake HAL. It loaded `SX1302.py`, constructed
+the interface, set `mode`, `OUT`, and IFAC state, started the worker, and showed
+the interface online with `HW_MTU = 254` and ~1757.8 bit/s. With an IFAC
+passphrase, the interface reduced `HW_MTU` to 238 so the 16-byte IFAC tag still
+fits the 255-byte HAL limit. TX submission and clean detach also worked.
 
 Tasks:
 

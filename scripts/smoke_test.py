@@ -11,8 +11,6 @@ It does not require Reticulum and does not start any daemon.
 from __future__ import annotations
 
 import argparse
-import os
-import subprocess
 import sys
 from pathlib import Path
 import time
@@ -24,6 +22,7 @@ if str(ROOT) not in sys.path:
 from sx1302_reticulum import structs  # noqa: E402
 from sx1302_reticulum.config import BANDWIDTHS, CODING_RATES, ConfigError, BoardProfile  # noqa: E402
 from sx1302_reticulum.hal import Hal, HalError  # noqa: E402
+from sx1302_reticulum.reset import ResetError, run_reset  # noqa: E402
 
 
 def _payload_from_args(args: argparse.Namespace) -> bytes:
@@ -33,22 +32,6 @@ def _payload_from_args(args: argparse.Namespace) -> bytes:
         except ValueError as exc:
             raise ConfigError(f"invalid --payload-hex: {exc}") from exc
     return args.payload.encode("utf-8")
-
-
-def _run_reset(profile: BoardProfile, action: str) -> None:
-    command = profile.reset_command(action)
-    if command is None:
-        print(f"Reset {action}: skipped (disabled in board profile)")
-        return
-    print(f"Reset {action}: {' '.join(command)}")
-    env = os.environ.copy()
-    for key, value in profile.reset_env().items():
-        env.setdefault(key, value)
-    if "SX1302_RESET_GPIO" in env:
-        print(f"Reset GPIO: {env['SX1302_RESET_GPIO']}")
-    result = subprocess.run(command, env=env)
-    if result.returncode != 0:
-        raise RuntimeError(f"reset script failed with exit code {result.returncode}")
 
 
 def _wait_tx_free(hal: Hal, profile: BoardProfile, timeout: float = 5.0) -> None:
@@ -191,8 +174,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.no_reset:
         try:
-            _run_reset(profile, "start")
-        except (OSError, RuntimeError) as exc:
+            run_reset(profile, "start", log=print)
+        except (OSError, ResetError) as exc:
             print(f"reset failed: {exc}", file=sys.stderr)
             return 1
 
@@ -231,8 +214,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"warning: HAL stop failed: {exc}", file=sys.stderr)
         if not args.no_reset:
             try:
-                _run_reset(profile, "stop")
-            except (OSError, RuntimeError) as exc:
+                run_reset(profile, "stop", log=print)
+            except (OSError, ResetError) as exc:
                 print(f"warning: reset stop failed: {exc}", file=sys.stderr)
 
 
