@@ -1,11 +1,12 @@
 # Testing on a Raspberry Pi
 
-This guide covers Phase 2 hardware bring-up: proving that the patched
-`libloragw.so` can reset, start, transmit, and receive raw LoRa packets on a
-RAK2287 (SX1302 + SX1250) before the Reticulum interface exists.
+This guide covers hardware bring-up and Reticulum integration on a Raspberry
+Pi with a RAK2287 (SX1302 + SX1250): OS setup, SPI/GPIO permissions, building
+the patched `libloragw.so`, raw LoRa transmit and receive, and the in-process
+Reticulum interface with two-node tests.
 
-> **Scope:** these steps test raw LoRa only. The Reticulum external interface is
-> Phase 3/4 work, so `rnstatus` and `rnping` are not expected to work yet.
+> **Scope:** sections 4–7 cover raw LoRa bring-up with the smoke test.
+> Section 8 covers the in-process Reticulum interface and two-node tests.
 
 ## 1. What you need
 
@@ -524,13 +525,13 @@ gpioinfo
 
 ## 12. What this does not validate yet
 
-- Live Reticulum operation (`rnstatus`, `rnping`, `rnprobe`). The interface
-  core and the external shim are unit tested, but a hardware run is still
-  required to confirm startup, status output, and bidirectional traffic.
+- Restart and soak behaviour. Cold start, warm restart, repeated `rnsd`
+  stop/start, and multi-hour runs are separate Phase 5 checks.
 - Runtime frequency/SF/BW changes. The radio is configured once per process.
 - CSMA/CAD or automatic duty-cycle enforcement. You are responsible for
   regional airtime rules.
 - Multiple SX1302 instances in one process. The HAL has global state.
+- Throughput, latency and packet loss at other SF/BW settings.
 
 ## 13. Recording a result
 

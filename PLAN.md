@@ -1,6 +1,6 @@
 # SX1302 Reticulum Interface — Implementation Plan
 
-Status: Phases 0–3 complete; Phase 4 implemented and loader-verified; live hardware validation (Phase 5) next
+Status: Phases 0–4 complete; Phase 5 two-node validation passed, restart and soak checks remaining
 Date: 2026-11-01
 Baseline: Semtech `sx1302_hal` v2.1.0 (now vendored under `vendor/sx1302_hal/`)  
 Reference: [`SX1302_RETICULUM_FINDINGS.md`](SX1302_RETICULUM_FINDINGS.md)
@@ -25,7 +25,7 @@ The interface will:
 
 - `rnsd` loads the interface without patching Reticulum.
 - `rnstatus` reports the interface online with a plausible bitrate.
-- Bidirectional `rnping`/`rnprobe` works against a second LoRa node.
+- Bidirectional `rnprobe` works against a second LoRa node.
 - Packets larger than the hardware MTU are fragmented by Reticulum and
   delivered correctly.
 - Restart and shutdown leave the SPI/GPIO state clean.
@@ -344,7 +344,7 @@ Implemented:
   it exposes the class; also checks the install helper's symlink behavior.
 
 Remaining for Phase 5: start `rnsd` on hardware, confirm `rnstatus` shows the
-interface online with the expected MTU, and run `rnping`/`rnprobe` both ways.
+interface online with the expected MTU, and run `rnprobe` both ways.
 
 Loader validation: RNS 1.5.7 was started in-process with a temporary
 `[interfaces]` configuration and a fake HAL. It loaded `SX1302.py`, constructed
@@ -392,30 +392,35 @@ Exit criteria:
 
 ### Phase 5 — End-to-end validation and hardening
 
-Status: **in progress** (2026-11-01).
+Status: **in progress** (2026-11-01). Two-node functional tests passed on
+hardware; restart and soak checks remain.
 
-Validated so far on the RAK2287 / Raspberry Pi:
+Validated on two RAK2287 / Raspberry Pi nodes:
 
 - Reticulum 1.5.7 loads the external shim and brings the interface online.
   `rnstatus` reports `SX1302Interface[SX1302 LoRa]`, Status Up, Mode Full,
   MTU 254, and 1.76 kbps.
 - The transmit path was exercised through real Reticulum with a shared
   instance and an external `rnpath` client: a path request reached
-  `process_outgoing()` and was submitted to the worker. The same check is
-  documented in the Pi guide.
-- Idle traffic stays at zero until Reticulum has a packet to send, so no
-  announces are expected without a peer.
-- `scripts/rns_echo.py` provides the two-node probe target, and the Pi guide
-  documents the `rnpath`/`rnprobe` sequence plus an `rncp` fragmentation check.
+  `process_outgoing()` and was submitted to the worker.
+- Announces cross the radio: `rnstatus -A -t` counts received bytes and
+  announces, and `rnpath -t` learns the peer at one hop.
+- `rnprobe` round trips succeed in both directions, with RSSI and SNR reported
+  at both ends.
+- A 1 KB `rncp` transfer completes over a link, confirming link setup and
+  fragmentation/reassembly past the 254-byte hardware MTU.
+- `scripts/rns_echo.py` provides the two-node probe target; the Pi guide
+  documents the full sequence.
 
-Still required: a second Reticulum node for announce/path/link tests in both
-directions, fragmentation, restart and soak testing.
+Still required: cold start and warm restart, repeated `rnsd` stop/start,
+`lgw_stop()` cleanup, permissions as the Reticulum user, and a multi-hour soak
+with queue, TX and descriptor checks.
 
 Tasks:
 
 1. Validate against an RNode configured to the same frequency, bandwidth, SF,
    CR, and private sync word.
-2. Run `rnstatus`, `rnping`, and `rnprobe` in both directions.
+2. Run `rnstatus` and `rnprobe` in both directions.
 3. Test payloads above 254 bytes to confirm Reticulum fragmentation.
 4. Measure throughput, latency, and packet loss at several SF/BW settings.
 5. Test cold start, warm restart, `lgw_stop()`, and reset-script cleanup.
@@ -515,7 +520,7 @@ The interface will not attempt runtime retuning in the first release.
 | Unit | Config validation, queueing, state machine | `pytest`, fake HAL |
 | Build | Clean build, patch application, reproducible `.so` | `scripts/build_hal.sh` |
 | Hardware smoke | Reset, start, raw TX, raw RX | `scripts/smoke_test.py` |
-| Integration | Reticulum loading, status, ping, fragmentation | `rnsd`, `rnstatus`, `rnping` |
+| Integration | Reticulum loading, status, probes, fragmentation | `rnsd`, `rnstatus`, `rnprobe`, `rncp` |
 | HIL | SX1302 ↔ RNode link quality and retransmission | Two radios |
 | Soak | Restarts, long run, queue/TX health | Repeatable scripts |
 

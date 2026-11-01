@@ -418,7 +418,7 @@ required.
    struct passed across the boundary. Also check field offsets.
 2. Standalone TX/RX test between the SX1302 and an RNode configured to the same
    frequency, bandwidth, SF, CR, and private sync word.
-3. `rnstatus`, `rnping`, `rnprobe` over the interface.
+3. `rnstatus` and `rnprobe` over the interface.
 4. Large-packet test to confirm Reticulum fragments correctly with
    `HW_MTU = 255`.
 5. Throughput/latency and packet-loss measurement.

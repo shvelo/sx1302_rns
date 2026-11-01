@@ -8,12 +8,10 @@ for Reticulum. It does **not** run a packet forwarder, does not speak GWMP, and
 does not emulate RNode KISS. Instead, a Reticulum external interface loads the
 SX1302 HAL as a shared library through `ctypes` and drives the radio directly.
 
-> **Status:** Phases 1–4 implemented. The upstream Semtech source is vendored,
-> the patched shared HAL builds as `build/libloragw.so`, the ctypes ABI is
-> verified, hardware TX/RX is validated on a RAK2287, the hardware-independent
-> interface core is tested against Reticulum 1.5.7, and Reticulum's external
-> loader has been verified in-process with a fake HAL. Live `rnsd`/`rnping`
-> validation on hardware is next. See [`PLAN.md`](PLAN.md) and the
+> **Status:** Phases 0–4 complete. Two RAK2287 nodes running Reticulum 1.5.7
+> exchange announces, path requests, `rnprobe` round trips in both directions,
+> and a 1 KB `rncp` transfer that exercises link setup and fragmentation.
+> Restart, soak and packaging checks remain. See [`PLAN.md`](PLAN.md) and the
 > [Raspberry Pi test guide](docs/raspberry-pi-testing.md).
 
 ## Documentation
