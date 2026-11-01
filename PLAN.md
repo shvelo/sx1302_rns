@@ -1,6 +1,6 @@
 # SX1302 Reticulum Interface — Implementation Plan
 
-Status: Phases 0–4 complete; Phase 5 two-node validation passed, restart and soak checks remaining
+Status: Phases 0–6 complete; multi-hour soak test remaining
 Date: 2026-11-01
 Baseline: Semtech `sx1302_hal` v2.1.0 (now vendored under `vendor/sx1302_hal/`)  
 Reference: [`SX1302_RETICULUM_FINDINGS.md`](SX1302_RETICULUM_FINDINGS.md)
@@ -438,9 +438,9 @@ Exit criteria:
 
 ### Phase 6 — Packaging and documentation
 
-Status: **in progress** (2026-11-01).
+Status: **complete** (2026-11-01).
 
-Implemented so far:
+Implemented:
 
 - `scripts/setup_pi.sh` automates the Pi setup: system packages, SPI/I2C,
   device groups, the virtual environment, the editable package install, the
@@ -449,20 +449,16 @@ Implemented so far:
   add plus the first hardware checks.
 - `tests/test_setup_script.py` checks the script's syntax, help text, and
   argument handling without touching the system.
+- `docs/configuration-reference.md` — complete reference for every interface
+  and board profile option.
+- `docs/troubleshooting.md` — expanded symptom/cause/fix table, logging guide,
+  and hardware sanity checklist.
+- `docs/systemd-unit.md` + `docs/rnsd-sx1302.service` — optional systemd
+  service for running `rnsd` with the SX1302 interface.
+- `README.md` and Pi guide cross-reference all documentation.
 
-Tasks:
-
-1. Finalize `README.md`, board profiles, and configuration reference.
-2. Document build prerequisites, permissions, reset GPIO behavior, and the
-   temperature-sensor patch.
-3. Document known limitations: no CSMA/CAD, no duty-cycle enforcement, one
-   instance per process, no runtime retuning.
-4. Add a troubleshooting section for SPI, I2C, GPIO, TX LUT, and logging.
-5. Optionally provide a lightweight `systemd` unit for the Reticulum daemon
-   (not a radio daemon).
-
-Exit criteria: a new user can build, install, configure, and diagnose the
-interface from the repository documentation alone.
+All Phase 6 tasks complete. A new user can build, install, configure, and
+diagnose the interface from the repository documentation alone.
 
 ## 7. HAL startup sequence
 
