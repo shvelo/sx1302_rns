@@ -411,10 +411,11 @@ Validated on two RAK2287 / Raspberry Pi nodes:
   fragmentation/reassembly past the 254-byte hardware MTU.
 - `scripts/rns_echo.py` provides the two-node probe target; the Pi guide
   documents the full sequence.
+- **Cold start and warm restart** confirmed: `lgw_stop()` and reset-stop run
+  cleanly; interface comes back online on restart.
 
-Still required: cold start and warm restart, repeated `rnsd` stop/start,
-`lgw_stop()` cleanup, permissions as the Reticulum user, and a multi-hour soak
-with queue, TX and descriptor checks.
+Still required: multi-hour soak with queue, TX and descriptor checks,
+permissions as the Reticulum user.
 
 Tasks:
 

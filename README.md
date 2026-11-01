@@ -18,7 +18,12 @@ SX1302 HAL as a shared library through `ctypes` and drives the radio directly.
 
 - [`docs/raspberry-pi-testing.md`](docs/raspberry-pi-testing.md) — step-by-step
   hardware bring-up on a Raspberry Pi with a RAK2287: OS setup, SPI/GPIO
-  permissions, build, TX/RX smoke tests, and troubleshooting.
+  permissions, build, TX/RX smoke tests, and two-node Reticulum tests.
+- [`docs/configuration-reference.md`](docs/configuration-reference.md) — complete
+  reference for interface and board profile options.
+- [`docs/troubleshooting.md`](docs/troubleshooting.md) — symptom/cause/fix table,
+  logging, and hardware checklist.
+- [`docs/systemd-unit.md`](docs/systemd-unit.md) — optional systemd service for `rnsd`.
 - [`PLAN.md`](PLAN.md) — phased implementation plan, architecture, risks, and
   acceptance criteria.
 - [`SX1302_RETICULUM_FINDINGS.md`](SX1302_RETICULUM_FINDINGS.md) — research

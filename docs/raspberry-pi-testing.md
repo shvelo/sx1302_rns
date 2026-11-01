@@ -546,3 +546,9 @@ python3 -c 'from sx1302_reticulum.hal import Hal; print(Hal().version())'
 
 Also save the full smoke-test output, the board profile used, the payload hex,
 and the RX RSSI/SNR values. That is enough to reproduce most bring-up problems.
+
+## 14. Further documentation
+
+- [Configuration reference](configuration-reference.md) — every interface and board profile option.
+- [Troubleshooting guide](troubleshooting.md) — expanded symptom/cause/fix table, logging, and hardware checklist.
+- [systemd unit](systemd-unit.md) — optional service file for running `rnsd` with the SX1302 interface.
