@@ -145,7 +145,7 @@ def test_interface_lifecycle(rns_log, fake_hal, write_profile):
     assert interface.online is False
 
     interface.final_init()
-    interface.worker.wait_ready(2)
+    interface.radio.wait_ready(2)
     assert wait_until(lambda: interface.online)
 
     fake_hal.rx_batches.append([make_rx(b"hello")])
@@ -175,7 +175,7 @@ def test_interface_lifecycle(rns_log, fake_hal, write_profile):
     interface.detach()
     interface.teardown()
     assert fake_hal.stop_calls == 1
-    assert not interface.worker._thread.is_alive()
+    assert not interface.radio.is_thread_alive()
 
 
 def test_ifac_overhead_reduces_hw_mtu(rns_log, fake_hal, write_profile):
@@ -185,7 +185,7 @@ def test_ifac_overhead_reduces_hw_mtu(rns_log, fake_hal, write_profile):
     interface.ifac_identity = object()
     interface.ifac_size = 16
     interface.final_init()
-    interface.worker.wait_ready(2)
+    interface.radio.wait_ready(2)
 
     assert interface.HW_MTU == 238
     assert interface._max_on_air == 254
@@ -233,10 +233,10 @@ def test_startup_failure_leaves_interface_offline(rns_log, monkeypatch, write_pr
 
     interface.final_init()
     with pytest.raises(WorkerError, match="cannot start"):
-        interface.worker.wait_ready(2)
+        interface.radio.wait_ready(2)
 
     assert interface.online is False
-    assert interface.worker.startup_error is not None
+    assert interface.radio.startup_error is not None
 
     interface.detach()
     assert hal.stop_calls == 0

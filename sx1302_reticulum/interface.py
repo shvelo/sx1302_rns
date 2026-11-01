@@ -13,7 +13,8 @@ from RNS.Interfaces.Interface import Interface
 
 from .config import BoardProfile, ConfigError
 from .hal import Hal
-from .worker import RadioWorker, RxPacket, TxQueueFull, WorkerError
+from .radio import Radio
+from .worker import RxPacket, TxQueueFull, WorkerError
 
 
 HW_MTU = 254
@@ -98,7 +99,7 @@ class SX1302Interface(Interface):
         self.r_stat_snr = None
         self.r_stat_q = None
 
-        self.worker: RadioWorker | None = None
+        self.radio: Radio | None = None
         self._shutdown_done = False
 
         library = c["library"] if "library" in c and str(c["library"]).strip() else None
@@ -119,7 +120,7 @@ class SX1302Interface(Interface):
 
     def final_init(self):
         """Start the radio worker. Called by Reticulum after ``add_interface``."""
-        if self.worker is not None or self.detached or self._shutdown_done:
+        if self.radio is not None or self.detached or self._shutdown_done:
             return
 
         # IFAC is added on top of HW_MTU after interface_post_init(), but the
@@ -134,11 +135,12 @@ class SX1302Interface(Interface):
                 RNS.LOG_NOTICE,
             )
 
-        self.worker = RadioWorker(
+        self.radio = Radio(
             self.profile,
-            hal_factory=self._make_hal,
             on_rx=self._handle_rx,
             on_state=self._handle_state,
+            on_tx=lambda payload: None,
+            hal_factory=self._make_hal,
             log=self._log,
             log_error=self._log_error,
             reset=self._use_reset,
@@ -151,7 +153,7 @@ class SX1302Interface(Interface):
             stop_timeout=self._stop_timeout,
         )
         RNS.log(f"Starting {self}", RNS.LOG_NOTICE)
-        self.worker.start()
+        self.radio.start()
 
     def detach(self):
         self.detached = True
@@ -161,7 +163,7 @@ class SX1302Interface(Interface):
         self._shutdown()
 
     def process_outgoing(self, data):
-        if not self.online or self.detached or self.worker is None:
+        if not self.online or self.detached or self.radio is None:
             return
         if not data:
             return
@@ -176,7 +178,7 @@ class SX1302Interface(Interface):
             return
 
         try:
-            self.worker.submit(data)
+            self.radio.send(data)
         except TxQueueFull:
             self.tx_drops += 1
             self.tx_dropped_bytes += len(data)
@@ -235,11 +237,11 @@ class SX1302Interface(Interface):
         self._shutdown_done = True
         self.online = False
 
-        worker = self.worker
-        if worker is None:
+        radio = self.radio
+        if radio is None:
             return
-        if not worker.stop():
-            self._log_error(f"timed out waiting for {self} radio thread to stop")
+        if not radio.stop():
+            self._log_error(f"timed out waiting for {self} radio to stop")
 
     def _quality(self, snr: float) -> float:
         sf_offset = self.profile.spreadingfactor - 7
