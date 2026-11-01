@@ -405,6 +405,8 @@ Validated so far on the RAK2287 / Raspberry Pi:
   documented in the Pi guide.
 - Idle traffic stays at zero until Reticulum has a packet to send, so no
   announces are expected without a peer.
+- `scripts/rns_echo.py` provides the two-node probe target, and the Pi guide
+  documents the `rnpath`/`rnprobe` sequence plus an `rncp` fragmentation check.
 
 Still required: a second Reticulum node for announce/path/link tests in both
 directions, fragmentation, restart and soak testing.

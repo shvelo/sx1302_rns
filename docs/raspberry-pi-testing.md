@@ -376,6 +376,83 @@ This exercises the same path a real packet uses. The CLI client connects to the
 running shared instance, and the instance hands the frame to
 `SX1302Interface.process_outgoing()`.
 
+### Test with a second SX1302 node
+
+Both nodes must use the same frequency, bandwidth, SF, CR, and sync word, and
+must agree on IFAC: either neither node has a passphrase, or both use the same
+one. The example profile already matches on the radio side.
+
+On node B, start the probe responder. It announces one destination and answers
+probes:
+
+```bash
+. .venv/bin/activate
+python scripts/rns_echo.py
+```
+
+It prints the name and hash:
+
+```text
+Name:             sx1302.echo
+Destination hash: f0d91a8400b2b1ecfccfe29375443258
+Identity hash:    <f80eddcf348fa097b41f83fe41fe8d3d>
+
+Probe this node from the other end with:
+  rnprobe sx1302.echo f0d91a8400b2b1ecfccfe29375443258
+```
+
+On node A, wait a few seconds for the announce and check what arrived:
+
+```bash
+rnstatus -A -t
+rnpath -t
+```
+
+- `rnstatus -A -t` should show received bytes and an announce count on the
+  SX1302 interface.
+- `rnpath -t` should list the new destination one hop away.
+
+Then probe it. In RNS 1.5.7 the destination name comes before the hash:
+
+```bash
+rnprobe sx1302.echo <destination_hash> -n 1 -s 32 -w 5 -t 20
+```
+
+A working link prints `Valid reply from <hash>`, the round-trip time, the hop
+count, and RSSI/SNR. The responder also prints every packet it receives with
+the RSSI and SNR reported by its own interface.
+
+Swap the roles to test the other direction. Keep probes small and infrequent:
+a 32-byte probe is roughly 0.3 s of airtime each way at SF9, and EU868 allows
+1% duty cycle (about 36 s per hour) at 868.1 MHz.
+
+### Test fragmentation with rncp
+
+Plain Reticulum packets are not fragmented for the interface, so a direct
+packet must fit the 254-byte hardware MTU. Link traffic is fragmented. Use
+`rncp` to verify a payload larger than the MTU travels and reassembles:
+
+On node B, print the listener hash, then start the listener:
+
+```bash
+rncp --listen -n -p
+mkdir -p /tmp/rncp-in
+rncp --listen -n -b 0 --save /tmp/rncp-in
+```
+
+`-b 0` announces once at startup; without it the listener does not announce.
+
+On node A, send a random 1 KB file:
+
+```bash
+head -c 1024 /dev/urandom > /tmp/payload.bin
+rncp /tmp/payload.bin <listener_hash>
+```
+
+The transfer uses a Reticulum link and resource segmentation. Confirm that
+`/tmp/rncp-in/payload.bin` exists and matches the source. One kilobyte takes
+roughly ten seconds of airtime at SF9, so do not repeat it in a loop.
+
 ## 9. Suggested test order
 
 Run these in order and stop at the first failure:
@@ -385,11 +462,16 @@ Run these in order and stop at the first failure:
    temperature fallback.
 3. `./scripts/smoke_test.py --tx-only --payload "test"` — HAL accepts a TX.
 4. Two-node receive test — verifies RF, PHY settings, and CRC.
-5. Repeat step 2 after a cold boot — confirms reset and configuration are
+5. Start `rnsd` on both nodes and run `scripts/rns_echo.py` on one; use
+   `rnpath` and `rnprobe` from the other — verifies announces, path discovery,
+   proofs, and PHY statistics through Reticulum.
+6. `rncp` a 1 KB file between the nodes — verifies link setup and
+   fragmentation over the interface.
+7. Repeat step 2 after a cold boot — confirms reset and configuration are
    reproducible.
-6. Long receive soak, for example `--rx-only --rx-timeout 600` — checks for
+8. Long receive soak, for example `--rx-only --rx-timeout 600` — checks for
    stuck state and descriptor leaks.
-7. Try a second PHY setting, for example `--spreadingfactor 7` on both nodes,
+9. Try a second PHY setting, for example `--spreadingfactor 7` on both nodes,
    to confirm the profile is not accidentally hard-coded.
 
 For 250 kHz or 500 kHz bandwidth use service mode (the default). The
