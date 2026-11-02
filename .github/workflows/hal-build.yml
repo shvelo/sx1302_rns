@@ -6,7 +6,6 @@ on:
 
 jobs:
   build-hal:
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -19,13 +18,10 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install setuptools wheel
+          python -m pip install --break-system-packages setuptools wheel
 
       - name: Build HAL shared library
         run: |
-          # This assumes we're on a Raspberry Pi with the build tools
-          # On non-PI runners, this will be skipped
           chmod +x ./scripts/build_hal.sh
           ./scripts/build_hal.sh
 
@@ -35,5 +31,5 @@ jobs:
             echo "✓ HAL library built successfully"
             ls -la build/libloragw.so
           else
-            echo "✗ HAL library not found - build may have failed or this is not a Pi"
+            echo "✗ HAL library not found"
           fi
