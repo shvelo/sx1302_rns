@@ -463,9 +463,11 @@ Run these in order and stop at the first failure:
    temperature fallback.
 3. `./scripts/smoke_test.py --tx-only --payload "test"` — HAL accepts a TX.
 4. Two-node receive test — verifies RF, PHY settings, and CRC.
-5. Start `rnsd` on both nodes and run `scripts/rns_echo.py` on one; use
-   `rnpath` and `rnprobe` from the other — verifies announces, path discovery,
-   proofs, and PHY statistics through Reticulum.
+5. Run `scripts/rns_echo.py` on one node and `rnsd` on the other; use
+   `rnpath` and `rnprobe` from the `rnsd` node — verifies announces, path
+   discovery, proofs, and PHY statistics through Reticulum. Do not run `rnsd`
+   on the `rns_echo` node: `rns_echo` hosts its own Reticulum instance and owns
+   the HAL.
 6. `rncp` a 1 KB file between the nodes — verifies link setup and
    fragmentation over the interface.
 7. Repeat step 2 after a cold boot — confirms reset and configuration are

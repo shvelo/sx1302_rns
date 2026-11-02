@@ -24,28 +24,32 @@ class HalError(RuntimeError):
 
 
 def find_library_path(explicit: str | Path | None = None) -> Path:
-    """Locate libloragw.so using an explicit path, the environment, or build/."""
+    """Locate libloragw.so using an explicit path, the SX1302_HAL_LIB env var, or system."""
     candidates: list[Path] = []
     if explicit is not None:
         candidates.append(Path(explicit).expanduser())
     env_path = os.environ.get("SX1302_HAL_LIB")
     if env_path:
         candidates.append(Path(env_path).expanduser())
-    candidates.extend(
-        [
-            ROOT / "build" / "libloragw.so",
-            ROOT / "libloragw.so",
-        ]
-    )
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate.resolve()
-
+    # System-installed .so (via ldconfig)
     found = ctypes.util.find_library("loragw")
     if found:
         return Path(found)
+    # Check candidates (explicit path, env var) before well-known locations
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+    # Fallback: check a few well-known locations
+    for loc in [
+        Path("/usr/lib/arm-linux-gnueabihf/libloragw.so"),
+        Path("/usr/local/lib/libloragw.so"),
+        Path("/usr/lib/libloragw.so"),
+    ]:
+        if loc.is_file():
+            return loc.resolve()
     raise FileNotFoundError(
-        "libloragw.so not found; run scripts/build_hal.sh or set SX1302_HAL_LIB"
+        "libloragw.so not found; set SX1302_HAL_LIB or run sx1302-ctl --init "
+        "to install the prebuilt HAL library"
     )
 
 

@@ -6,12 +6,17 @@ build-backend = "setuptools.build_meta"
 name = "sx1302-reticulum"
 version = "0.1.0"
 description = "In-process Reticulum interface for SX1302 LoRa concentrators"
-readme = "README.md"
 requires-python = ">=3.9"
 dependencies = ["rns>=1.5.7,<1.6"]
 
 [tool.setuptools.packages.find]
 include = ["sx1302_reticulum*"]
+
+[tool.setuptools.package-data]
+sx1302_reticulum = ["libloragw.so"]
+
+[project.scripts]
+sx1302-ctl = "sx1302_reticulum.ctl:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
