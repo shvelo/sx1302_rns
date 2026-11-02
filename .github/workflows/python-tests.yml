@@ -1,0 +1,45 @@
+name: Python Tests
+
+on:
+  push:
+    branches: [feature/reticulum-sx1302-interface]
+  pull_request:
+    branches: [feature/reticulum-sx1302-interface]
+  schedule:
+    - cron: '0 2 * * 0'  # weekly
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.14-slim
+    defaults:
+      run:
+        working-dir: /repo
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest setuptools
+
+      - name: Install package in development mode
+        run: |
+          pip install --break-system-packages -e .
+
+      - name: Run unit tests
+        run: |
+          python -m pytest -v
+
+      - name: Verify package files
+        run: |
+          # Check that the package includes the HAL library
+          ls -la sx1302_reticulum/libloragw.so 2>/dev/null || echo "HAL .so not in source tree (expected for source checkout)"
