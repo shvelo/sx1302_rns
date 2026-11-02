@@ -39,6 +39,11 @@ class Radio:
         tx_free_timeout: float = 5.0,
         tx_complete_margin: float = 2.0,
         stop_timeout: float = 10.0,
+        duty_cycle_percent: float = 0.0,
+        duty_cycle_window_s: float = 3600.0,
+        lbt_rssi_threshold: float | None = None,
+        lbt_check_ms: float = 50.0,
+        lbt_timeout_s: float = 5.0,
     ):
         self.profile = profile
         self.on_rx = on_rx
@@ -63,6 +68,11 @@ class Radio:
             tx_free_timeout=tx_free_timeout,
             tx_complete_margin=tx_complete_margin,
             stop_timeout=stop_timeout,
+            duty_cycle_percent=duty_cycle_percent,
+            duty_cycle_window_s=duty_cycle_window_s,
+            lbt_rssi_threshold=lbt_rssi_threshold,
+            lbt_check_ms=lbt_check_ms,
+            lbt_timeout_s=lbt_timeout_s,
         )
 
     # ------------------------------------------------------------------
@@ -92,6 +102,22 @@ class Radio:
         ``WorkerError`` if the payload exceeds the 254-byte HAL limit.
         """
         self.worker.submit(payload)
+
+    def reconfigure(self, profile: BoardProfile) -> None:
+        """Retune the radio at runtime without restarting the process.
+
+        The new profile is applied by the worker thread; queued payloads
+        continue to be transmitted with the new modulation.
+        """
+        self.worker.reconfigure(profile)
+
+    @property
+    def duty_cycle_percent(self) -> float:
+        return self.worker.duty_cycle_percent
+
+    @duty_cycle_percent.setter
+    def duty_cycle_percent(self, value: float) -> None:
+        self.worker.duty_cycle_percent = value
 
     # ------------------------------------------------------------------
     # State / Counters

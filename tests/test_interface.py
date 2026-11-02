@@ -240,3 +240,65 @@ def test_startup_failure_leaves_interface_offline(rns_log, monkeypatch, write_pr
 
     interface.detach()
     assert hal.stop_calls == 0
+
+
+def test_airtime_and_lbt_options_are_parsed(rns_log, fake_hal, write_profile):
+    interface = SX1302Interface(
+        FakeOwner(),
+        make_config(
+            write_profile(),
+            duty_cycle_percent="1.5",
+            duty_cycle_window="60",
+            lbt_rssi_threshold="-90",
+            lbt_check_ms="25",
+            lbt_timeout="2.5",
+        ),
+    )
+
+    assert interface._duty_cycle_percent == pytest.approx(1.5)
+    assert interface._duty_cycle_window_s == pytest.approx(60.0)
+    assert interface._lbt_rssi_threshold == pytest.approx(-90.0)
+    assert interface._lbt_check_ms == pytest.approx(25.0)
+    assert interface._lbt_timeout == pytest.approx(2.5)
+
+    interface.final_init()
+    interface.radio.wait_ready(2)
+    worker = interface.radio.worker
+    assert worker.duty_cycle_percent == pytest.approx(1.5)
+    assert worker.duty_cycle_window_s == pytest.approx(60.0)
+    assert worker.lbt_rssi_threshold == pytest.approx(-90.0)
+    assert worker.lbt_check_ms == pytest.approx(25.0)
+    assert worker.lbt_timeout_s == pytest.approx(2.5)
+
+    interface.detach()
+
+
+def test_interface_runtime_reconfigure(rns_log, fake_hal, write_profile):
+    interface = SX1302Interface(FakeOwner(), make_config(write_profile()))
+    interface.final_init()
+    interface.radio.wait_ready(2)
+
+    new_profile = interface.profile.with_overrides(
+        frequency=869_525_000, spreadingfactor=10
+    )
+    interface.reconfigure(new_profile)
+
+    assert wait_until(lambda: interface.profile.frequency == 869_525_000)
+    assert wait_until(lambda: fake_hal.configure_calls == 2)
+    assert wait_until(lambda: fake_hal.start_calls == 2)
+    assert interface.bitrate == pytest.approx(new_profile.bitrate_bps)
+    assert interface.radio.worker.profile.frequency == 869_525_000
+
+    interface.detach()
+
+
+def test_invalid_airtime_option_is_rejected(rns_log, write_profile):
+    with pytest.raises(ValueError, match="duty_cycle_percent"):
+        SX1302Interface(
+            FakeOwner(), make_config(write_profile(), duty_cycle_percent="101")
+        )
+
+    with pytest.raises(ValueError, match="duty_cycle_window"):
+        SX1302Interface(
+            FakeOwner(), make_config(write_profile(), duty_cycle_window="0")
+        )

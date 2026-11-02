@@ -11,6 +11,7 @@ fake HAL and used by other front ends.
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 import queue
 import threading
@@ -81,6 +82,10 @@ class Counters:
     tx_errors: int = 0
     tx_timeouts: int = 0
     queue_drops: int = 0
+    tx_airtime_ms: int = 0
+    lbt_busy_count: int = 0
+    lbt_drops: int = 0
+    duty_cycle_waits: int = 0
 
 
 # The HAL has global state. Only one worker may own it per process.
@@ -114,11 +119,24 @@ class RadioWorker:
         tx_free_timeout: float = 5.0,
         tx_complete_margin: float = 2.0,
         stop_timeout: float = 10.0,
+        duty_cycle_percent: float = 0.0,
+        duty_cycle_window_s: float = 3600.0,
+        lbt_rssi_threshold: float | None = None,
+        lbt_check_ms: float = 50.0,
+        lbt_timeout_s: float = 5.0,
     ):
         if hal is not None and hal_factory is not None:
             raise ValueError("pass either hal or hal_factory, not both")
         if queue_size < 1:
             raise ValueError("queue_size must be at least 1")
+        if not 0.0 <= duty_cycle_percent <= 100.0:
+            raise ValueError("duty_cycle_percent must be between 0 and 100")
+        if duty_cycle_window_s <= 0.0:
+            raise ValueError("duty_cycle_window_s must be positive")
+        if lbt_check_ms <= 0.0:
+            raise ValueError("lbt_check_ms must be positive")
+        if lbt_timeout_s < 0.0:
+            raise ValueError("lbt_timeout_s must not be negative")
 
         self.profile = profile
         self.max_payload = MAX_PAYLOAD
@@ -134,12 +152,20 @@ class RadioWorker:
         self.tx_free_timeout = max(0.0, tx_free_timeout)
         self.tx_complete_margin = max(0.0, tx_complete_margin)
         self.stop_timeout = max(0.0, stop_timeout)
+        self.duty_cycle_window_s = float(duty_cycle_window_s)
+        self._tx_history: deque[tuple[float, float]] = deque()
+        self._history_lock = threading.Lock()
+        self.duty_cycle_percent = duty_cycle_percent
+        self.lbt_rssi_threshold = lbt_rssi_threshold
+        self.lbt_check_ms = lbt_check_ms
+        self.lbt_timeout_s = lbt_timeout_s
 
         self._hal = hal
         self._hal_factory = hal_factory if hal is None else None
         self._hal_started = False
 
         self._queue: queue.Queue[bytes] = queue.Queue(maxsize=queue_size)
+        self._config_queue: queue.Queue[BoardProfile | None] = queue.Queue()
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._online_event = threading.Event()
@@ -149,6 +175,8 @@ class RadioWorker:
 
         self._last_rssi: float | None = None
         self._last_snr: float | None = None
+        self._last_rx_monotonic: float | None = None
+        self._last_rx_rssi: float | None = None
 
     # ------------------------------------------------------------------
     # Public API (never touches the HAL)
@@ -225,6 +253,37 @@ class RadioWorker:
             self._counters.queue_drops += 1
             raise TxQueueFull("transmit queue is full") from exc
 
+    def reconfigure(self, profile: BoardProfile) -> None:
+        """Request a runtime radio reconfiguration.
+
+        The worker will stop RX, call ``hal.configure()`` and ``hal.start()``
+        with the new profile, then resume RX. This changes frequency, BW, SF,
+        CR, TX power, and other board settings without restarting the process.
+
+        Only one reconfiguration may be pending at a time; subsequent calls
+        replace the previous pending request.
+        """
+        # Drain any pending reconfig request so only the latest applies.
+        try:
+            while True:
+                self._config_queue.get_nowait()
+        except queue.Empty:
+            pass
+        self._config_queue.put_nowait(profile)
+
+    @property
+    def duty_cycle_percent(self) -> float:
+        return self._duty_cycle_percent
+
+    @duty_cycle_percent.setter
+    def duty_cycle_percent(self, value: float) -> None:
+        value = max(0.0, min(100.0, float(value)))
+        if value <= 0.0:
+            # Disabled: forget past airtime so a later re-enable starts fresh.
+            with self._history_lock:
+                self._tx_history.clear()
+        self._duty_cycle_percent = value
+
     def stop(self, timeout: float | None = None) -> bool:
         """Ask the worker to stop and wait for it.
 
@@ -292,7 +351,26 @@ class RadioWorker:
 
     def _loop(self, hal: RadioHal) -> None:
         rx_errors = 0
+        pending: bytes | None = None
+        pending_packet: structs.LgwPktTx | None = None
+        pending_airtime_ms = 0
+        duty_ready_at = 0.0
+        duty_wait_logged = False
+        lbt_wait_started: float | None = None
+
         while not self._stop_event.is_set():
+            if self._check_config(hal):
+                # The modulation changed; re-encode any packet we were about
+                # to transmit and recompute its duty-cycle budget.
+                if pending is not None:
+                    pending_packet = self.profile.make_tx_packet(pending)
+                    pending_airtime_ms = hal.time_on_air_ms(pending_packet)
+                duty_ready_at = 0.0
+                duty_wait_logged = False
+
+            if self._stop_event.is_set():
+                break
+
             if self._receive(hal):
                 rx_errors += 1
             else:
@@ -301,23 +379,92 @@ class RadioWorker:
             if self._stop_event.is_set():
                 break
 
-            try:
-                payload = self._queue.get_nowait()
-            except queue.Empty:
-                if not self._stop_event.wait(self.rx_idle_sleep):
-                    continue
-                break
+            if pending is None:
+                try:
+                    pending = self._queue.get_nowait()
+                except queue.Empty:
+                    pass
+
+                if pending is None:
+                    backoff = self._idle_backoff(rx_errors)
+                    if not self._stop_event.wait(backoff):
+                        continue
+                    break
+
+                pending_packet = self.profile.make_tx_packet(pending)
+                pending_airtime_ms = hal.time_on_air_ms(pending_packet)
+                duty_ready_at = 0.0
+                duty_wait_logged = False
+                lbt_wait_started = None
+
+            now = time.monotonic()
+
+            # Duty-cycle gate. Recompute lazily, and keep receiving while we
+            # wait so a long transmission ban does not deafen the interface.
+            if duty_ready_at < now:
+                duty_ready_at = self._duty_cycle_ready_at(now, pending_airtime_ms)
+
+            if duty_ready_at > now:
+                if not duty_wait_logged:
+                    self._counters.duty_cycle_waits += 1
+                    self._log(
+                        f"duty cycle limit ({self._duty_cycle_percent:g}% over "
+                        f"{self.duty_cycle_window_s:g} s): delaying TX by "
+                        f"{duty_ready_at - now:.2f} s"
+                    )
+                    duty_wait_logged = True
+                self._stop_event.wait(max(0.001, min(self.rx_idle_sleep or 0.01,
+                                                     duty_ready_at - now)))
+                continue
+
+            # Coarse listen-before-talk. The HAL does not expose an
+            # instantaneous RSSI, so this uses recently decoded frames as a
+            # proxy for channel activity.
+            if self._channel_busy(now):
+                self._counters.lbt_busy_count += 1
+                if lbt_wait_started is None:
+                    lbt_wait_started = now
+                waited = now - lbt_wait_started
+                if waited >= self.lbt_timeout_s:
+                    self._counters.lbt_drops += 1
+                    self._log_error(
+                        "LBT: channel stayed busy for "
+                        f"{waited:.2f} s; dropping pending frame"
+                    )
+                    pending = None
+                    pending_packet = None
+                else:
+                    self._stop_event.wait(
+                        max(0.001, min(self.lbt_check_ms / 1000.0,
+                                       self.lbt_timeout_s - waited))
+                    )
+                continue
+            lbt_wait_started = None
+
+            if pending_packet is None:
+                continue
 
             try:
-                self._transmit(hal, payload)
+                self._transmit(
+                    hal, pending, pending_packet, pending_airtime_ms
+                )
             except HalError as exc:
                 self._counters.tx_errors += 1
                 self._log_error(f"transmit failed: {exc}")
 
+            pending = None
+            pending_packet = None
+            duty_ready_at = 0.0
+            duty_wait_logged = False
+
             if rx_errors:
                 # A failing receive path should not turn into a busy loop.
-                backoff = min(1.0, 0.01 * (2 ** min(rx_errors, 7)))
-                self._stop_event.wait(backoff)
+                self._stop_event.wait(self._idle_backoff(rx_errors))
+
+    def _idle_backoff(self, rx_errors: int) -> float:
+        if rx_errors:
+            return min(1.0, 0.01 * (2 ** min(rx_errors, 7)))
+        return self.rx_idle_sleep
 
     def _receive(self, hal: RadioHal) -> bool:
         """Poll the HAL once. Returns True when the poll failed."""
@@ -333,6 +480,11 @@ class RadioWorker:
         return False
 
     def _dispatch(self, packet: structs.LgwPktRx) -> None:
+        # Remember recent channel activity even when the frame is unusable;
+        # the LBT gate uses it as a coarse carrier-sense proxy.
+        self._last_rx_monotonic = time.monotonic()
+        self._last_rx_rssi = float(packet.rssic)
+
         if packet.status != structs.STAT_CRC_OK:
             self._counters.crc_errors += 1
             return
@@ -367,18 +519,23 @@ class RadioWorker:
             except Exception as exc:
                 self._log_error(f"receive callback failed: {exc}")
 
-    def _transmit(self, hal: RadioHal, payload: bytes) -> None:
+    def _transmit(
+        self,
+        hal: RadioHal,
+        payload: bytes,
+        packet: structs.LgwPktTx,
+        time_on_air_ms: int,
+    ) -> None:
         self._wait_tx_free(hal)
-
-        packet = self.profile.make_tx_packet(payload)
-        time_on_air_ms = hal.time_on_air_ms(packet)
 
         if self._stop_event.is_set():
             return
 
         hal.send(packet)
+        self._record_tx(time_on_air_ms)
         self._counters.tx_packets += 1
         self._counters.tx_bytes += len(payload)
+        self._counters.tx_airtime_ms += time_on_air_ms
 
         deadline = time.monotonic() + time_on_air_ms / 1000.0 + self.tx_complete_margin
         while time.monotonic() < deadline:
@@ -420,7 +577,114 @@ class RadioWorker:
             f"timed out after {self.tx_free_timeout:.1f} s waiting for TX_FREE"
         )
 
+    def _check_config(self, hal: RadioHal) -> bool:
+        """Check for a pending reconfiguration request and apply it.
+
+        Returns ``True`` when the profile changed.
+        """
+        try:
+            new_profile = self._config_queue.get_nowait()
+        except queue.Empty:
+            return False
+
+        self._log("Applying runtime radio reconfiguration")
+        self._reconfigure(hal, new_profile)
+        return True
+
+    def _reconfigure(self, hal: RadioHal, new_profile: BoardProfile) -> None:
+        """Stop RX, reconfigure the HAL, and resume RX with a new profile."""
+        hal.stop()
+        hal.configure(new_profile)
+        hal.start()
+
+        # Update the worker's profile so TX uses the new settings
+        self.profile = new_profile
+        self._log(
+            f"Radio reconfigured: {new_profile.frequency} Hz, "
+            f"BW {new_profile.bandwidth}, SF{new_profile.spreadingfactor}, "
+            f"CR {new_profile.codingrate}, {new_profile.tx_power} dBm"
+        )
+
     # ------------------------------------------------------------------
+    # Duty cycle and listen-before-talk
+    # ------------------------------------------------------------------
+
+    def _duty_cycle_ready_at(self, now: float, airtime_ms: float) -> float:
+        """Return the earliest monotonic time a new transmission may start.
+
+        Airtime is accounted over a sliding window of
+        ``duty_cycle_window_s`` seconds. A duty cycle of 0 disables the gate.
+        """
+        if self._duty_cycle_percent <= 0.0:
+            return now
+
+        allowed_ms = (
+            self.duty_cycle_window_s
+            * 1000.0
+            * self._duty_cycle_percent
+            / 100.0
+        )
+        if airtime_ms > allowed_ms:
+            # A single frame larger than the whole window budget can never
+            # satisfy the limit; let it through rather than blocking forever.
+            self._log_error(
+                f"packet airtime {airtime_ms} ms exceeds the "
+                f"{allowed_ms:.0f} ms duty-cycle budget"
+            )
+            return now
+
+        with self._history_lock:
+            self._prune_tx_history(now)
+            excess_ms = sum(airtime for _, airtime in self._tx_history)
+            excess_ms += airtime_ms - allowed_ms
+            if excess_ms <= 0.0:
+                return now
+
+            # Entries leave the window in timestamp order, so wait until enough
+            # of the oldest airtime has aged out.
+            for timestamp, airtime in self._tx_history:
+                excess_ms -= airtime
+                if excess_ms <= 0.0:
+                    return max(now, timestamp + self.duty_cycle_window_s)
+
+        return now
+
+    def _prune_tx_history(self, now: float) -> None:
+        """Drop entries that have aged out. Caller must hold ``_history_lock``."""
+        cutoff = now - self.duty_cycle_window_s
+        while self._tx_history and self._tx_history[0][0] <= cutoff:
+            self._tx_history.popleft()
+
+    def _record_tx(self, airtime_ms: float) -> None:
+        if self._duty_cycle_percent <= 0.0:
+            return
+        now = time.monotonic()
+        with self._history_lock:
+            self._prune_tx_history(now)
+            self._tx_history.append((now, float(airtime_ms)))
+
+    def _channel_busy(self, now: float) -> bool:
+        """Coarse carrier sense based on recently decoded frames.
+
+        The SX1302 HAL does not expose an instantaneous RSSI and its
+        ``RX_STATUS`` selector is unimplemented, so this treats a frame
+        decoded within the last ``lbt_check_ms`` whose RSSI is at or above
+        the threshold as a busy channel. It cannot see transmissions that
+        do not share our sync word.
+        """
+        if self.lbt_rssi_threshold is None:
+            return False
+        if self._last_rx_monotonic is None or self._last_rx_rssi is None:
+            return False
+        if now - self._last_rx_monotonic >= self.lbt_check_ms / 1000.0:
+            return False
+        return self._last_rx_rssi >= self.lbt_rssi_threshold
+
+    # ------------------------------------------------------------------
+
+    def _log(self, message: str) -> None:
+        if self.log is not None:
+            self.log(message)
 
     def _notify_state(self, online: bool) -> None:
         if self.on_state is None:

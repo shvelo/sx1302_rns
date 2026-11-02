@@ -61,11 +61,20 @@ class MeshcoreAdapter(Interface if _HAS_MESHCORE_PI else object):  # type: ignor
 
         self.profile = BoardProfile.from_ini(profile_path)
 
-        # Duty cycle handling (mirrors meshcore-pi's LoRaInterface)
-        self.airtime_dutycycle = config.get("airtime", 10)  # percent
+        # Duty cycle handling (mirrors meshcore-pi's LoRaInterface).
+        # meshcore-pi paces transmissions itself via transmit_wait(), so the
+        # worker-level duty-cycle gate stays disabled here to avoid applying
+        # the limit twice and queueing frames for minutes.
+        self.airtime_dutycycle = float(
+            config.get("duty_cycle_percent", config.get("airtime", 10))
+        )
         self.airtime_txtimestamp = []
         self.airtime_txtime = []
         self._max_airtime_samples = 5
+
+        lbt_threshold = config.get("lbt_rssi_threshold")
+        if lbt_threshold is not None:
+            lbt_threshold = float(lbt_threshold)
 
         # Create the Radio; the RX callback funnels packets into rx_q
         self._radio: Optional[Radio] = Radio(
@@ -75,6 +84,10 @@ class MeshcoreAdapter(Interface if _HAS_MESHCORE_PI else object):  # type: ignor
             log=self._log,
             log_error=self._log_error,
             reset=True,
+            duty_cycle_percent=0.0,
+            lbt_rssi_threshold=lbt_threshold,
+            lbt_check_ms=float(config.get("lbt_check_ms", 50.0)),
+            lbt_timeout_s=float(config.get("lbt_timeout", 5.0)),
         )
         self._radio_started = False
         self._online = False

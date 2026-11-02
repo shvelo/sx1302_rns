@@ -47,10 +47,12 @@ The interface will:
 
 - LoRaWAN, GWMP, network-server compatibility, or multi-channel gateway use.
 - RNode KISS protocol compatibility and RNode 508-byte split/reassembly.
-- Runtime frequency/SF/BW reconfiguration.
 - USB/MCU concentrator variants.
-- Full CSMA/CAD and duty-cycle enforcement.
+- Full CSMA/CAD (raw energy detection) and per-region regulatory automation.
 - Supporting multiple SX1302 instances in one process (the HAL has global state).
+
+Runtime retuning, a sliding-window duty-cycle budget and coarse LBT have since
+been added and are no longer out of scope.
 
 These can be revisited after the first release if the hardware proves usable.
 
@@ -169,11 +171,11 @@ Reticulum process
 | MTU | 254 bytes | HAL TX limit is 255; leaves room and avoids split logic. |
 | PHY | Private sync, explicit header, CRC on | Matches Reticulum's raw LoRa expectations. |
 | Channel plan | One RF chain, one IF/service chain | A gateway receiver is not needed for a single node. |
-| Runtime config | Configure once at startup | HAL refuses IF reconfiguration while running. |
+| Runtime config | Retune via `reconfigure()` | The worker stops, reconfigures and restarts the HAL on request. |
 | Temperature sensor | Optional HAL patch | Many SX1302 boards lack the STTS751; current HAL makes it fatal. |
 | TX gain | Board-specific LUT from config | The upstream tree has no universal LUT; incorrect values risk PA damage or poor range. |
 | Reset/power | External script by default, configurable | Reuses `reset_lgw.sh`; board GPIO differences stay outside Python. |
-| Duty cycle/CSMA | Not enforced in MVP; documented | The SX1302 has no built-in CAD/LBT without the SX1261 companion. |
+| Duty cycle/CSMA | Optional sliding-window budget + coarse LBT | The SX1302 has no built-in raw-energy CAD without the SX1261 companion; LBT uses recently decoded frames. |
 
 ## 6. Work breakdown
 
@@ -486,7 +488,8 @@ The eventual implementation should follow this order:
 7. Call `lgw_start()` in the worker thread.
 8. Only then mark the interface online.
 
-The interface will not attempt runtime retuning in the first release.
+The interface can be retuned at runtime through `reconfigure()`; the worker
+stops the HAL, applies the new profile and restarts it.
 
 ## 8. RX/TX contract
 
@@ -533,9 +536,9 @@ tests must be explicitly marked and never required by the default test run.
 | Wrong or missing TX gain LUT | Poor range or PA damage | Require a board profile; start with low power; document calibration. |
 | Reset GPIO values differ by board | Board will not start | Configurable reset command; document CoreCell defaults clearly. |
 | HAL logging mixes with Reticulum logs | Confusing output | Capture/redirect C stdout or document expected messages. |
-| No CSMA/CAD or duty-cycle enforcement | Collisions/regulatory risk | Document limitation; optional airtime budget; recommend LBT hardware. |
+| No raw-energy CSMA/CAD | Collisions/regulatory risk | Optional sliding-window airtime budget and coarse LBT; document the limits of decoded-frame sensing. |
 | `lgw_start()` takes seconds | Blocks Reticulum startup | Initialize in the worker; report offline until ready. |
-| Runtime config assumptions | Interface fails after retune attempts | Preconfigure at startup and reject unsupported changes clearly. |
+| Runtime retune failure | Interface fails after retune attempts | Validate the new profile before use; worker restarts the HAL and reports errors. |
 | Reticulum API changes | External module breaks | Pin and test a known RNS version; keep shim thin. |
 | HAL global state | Multiple interfaces conflict | Enforce one instance per process. |
 | SPI/I2C/GPIO permissions | Runtime failure | Document udev/groups setup; test as the service user. |

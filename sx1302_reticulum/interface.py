@@ -112,6 +112,19 @@ class SX1302Interface(Interface):
         self._tx_free_timeout = self._option_float(c, "tx_free_timeout", 5.0)
         self._tx_complete_margin = self._option_float(c, "tx_complete_margin", 2.0)
         self._stop_timeout = self._option_float(c, "stop_timeout", 10.0)
+        self._duty_cycle_percent = self._option_float(c, "duty_cycle_percent", 0.0)
+        if not 0.0 <= self._duty_cycle_percent <= 100.0:
+            raise ValueError("configuration option duty_cycle_percent must be between 0 and 100")
+        self._duty_cycle_window_s = self._option_float(c, "duty_cycle_window", 3600.0)
+        if self._duty_cycle_window_s <= 0.0:
+            raise ValueError("configuration option duty_cycle_window must be positive")
+        self._lbt_rssi_threshold = self._option_float_optional(c, "lbt_rssi_threshold")
+        self._lbt_check_ms = self._option_float(c, "lbt_check_ms", 50.0)
+        if self._lbt_check_ms <= 0.0:
+            raise ValueError("configuration option lbt_check_ms must be positive")
+        self._lbt_timeout = self._option_float(c, "lbt_timeout", 5.0)
+        if self._lbt_timeout < 0.0:
+            raise ValueError("configuration option lbt_timeout must not be negative")
         self._use_reset = c.as_bool("reset") if "reset" in c else True
 
     # ------------------------------------------------------------------
@@ -151,9 +164,35 @@ class SX1302Interface(Interface):
             tx_free_timeout=self._tx_free_timeout,
             tx_complete_margin=self._tx_complete_margin,
             stop_timeout=self._stop_timeout,
+            duty_cycle_percent=self._duty_cycle_percent,
+            duty_cycle_window_s=self._duty_cycle_window_s,
+            lbt_rssi_threshold=self._lbt_rssi_threshold,
+            lbt_check_ms=self._lbt_check_ms,
+            lbt_timeout_s=self._lbt_timeout,
         )
         RNS.log(f"Starting {self}", RNS.LOG_NOTICE)
         self.radio.start()
+
+    def reconfigure(self, profile: BoardProfile | str | Path) -> None:
+        """Retune the radio at runtime.
+
+        ``profile`` may be a :class:`BoardProfile` or the path to a board
+        profile INI file. The change is applied by the worker thread; frames
+        queued before the change may still use the old modulation.
+        """
+        if self.radio is None:
+            raise RuntimeError("interface has not been started")
+
+        if not isinstance(profile, BoardProfile):
+            try:
+                profile = BoardProfile.from_ini(self._resolve_path(profile))
+            except (ConfigError, OSError) as exc:
+                raise ValueError(f"invalid board profile: {exc}") from exc
+
+        self.profile = profile
+        self.bitrate = profile.bitrate_bps
+        self.bitrate_kbps = round(self.bitrate / 1000.0, 2)
+        self.radio.reconfigure(profile)
 
     def detach(self):
         self.detached = True
@@ -281,6 +320,15 @@ class SX1302Interface(Interface):
     def _option_float(config, key: str, default: float) -> float:
         if key not in config or not str(config[key]).strip():
             return default
+        try:
+            return float(str(config[key]).strip())
+        except ValueError as exc:
+            raise ValueError(f"configuration option {key} must be a number") from exc
+
+    @staticmethod
+    def _option_float_optional(config, key: str) -> float | None:
+        if key not in config or not str(config[key]).strip():
+            return None
         try:
             return float(str(config[key]).strip())
         except ValueError as exc:

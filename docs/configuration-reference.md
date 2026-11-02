@@ -72,6 +72,51 @@ high**: low → high pulse → low, then settle.
 | `tx_complete_margin` | float | 2.0 | Extra margin after calculated on-air time (seconds). |
 | `stop_timeout` | float | 10.0 | Max time to wait for worker thread on stop (seconds). |
 
+### 1.6 Airtime and channel access
+
+These options are optional and disabled by default. They implement a sliding
+airtime budget and a coarse listen-before-talk (LBT) gate in the worker. The
+worker keeps polling the receiver while it waits, so long duty-cycle delays do
+not stop inbound traffic.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `duty_cycle_percent` | float | 0 | Maximum transmit airtime as a percentage of `duty_cycle_window`. `0` disables the gate. EU868 1% would be `1`. |
+| `duty_cycle_window` | float | 3600 | Sliding window for duty-cycle accounting, in seconds. |
+| `lbt_rssi_threshold` | float | unset | Enable LBT when set. A recently decoded frame at or above this RSSI (dBm) marks the channel busy. |
+| `lbt_check_ms` | float | 50 | Channel must have been quiet for this long before transmitting (milliseconds). Also the polling interval while waiting. |
+| `lbt_timeout` | float | 5 | Maximum time to wait for a clear channel before dropping the pending frame (seconds). |
+
+```ini
+[[SX1302 LoRa]]
+  type = SX1302
+  board_profile = /path/to/rak2287-eu868.conf
+  duty_cycle_percent = 1
+  duty_cycle_window = 3600
+  lbt_rssi_threshold = -90
+  lbt_check_ms = 50
+  lbt_timeout = 5
+```
+
+LBT is a quiet-period aid, not full carrier-sense multiple access. The HAL does
+not expose an instantaneous RSSI, and the SX1302 `RX_STATUS` selector is
+unimplemented, so only frames that share the configured sync word and were
+fully decoded can mark the channel busy.
+
+### 1.7 Runtime retuning
+
+The interface can be retuned without restarting the process. From Python:
+
+```python
+interface.reconfigure("/path/to/another-board.conf")
+# or pass a BoardProfile:
+interface.reconfigure(profile.with_overrides(frequency=869_525_000))
+```
+
+The worker stops the HAL, applies the new profile, and restarts it. Frames that
+were already queued may still be sent with the old modulation; frames submitted
+after the reconfiguration call use the new settings.
+
 ## 2. Board Profile Format
 
 A board profile is an INI file describing the hardware. The example
@@ -176,4 +221,9 @@ IFAC adds a 16-byte authentication tag to every frame. Configure in Reticulum:
     # library = build/libloragw.so
     # ifac_passphrase = secret
     # queue_size = 16
+    # duty_cycle_percent = 1
+    # duty_cycle_window = 3600
+    # lbt_rssi_threshold = -90
+    # lbt_check_ms = 50
+    # lbt_timeout = 5
 ```

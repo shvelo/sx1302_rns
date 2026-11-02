@@ -312,3 +312,139 @@ def test_all_hal_calls_happen_on_the_worker_thread(profile):
     assert hal.thread_ids
     assert threading.get_ident() not in hal.thread_ids
     assert hal.thread_ids == {worker._thread.ident}
+
+
+def test_reconfigure_applies_a_new_profile(profile):
+    hal = FakeHal()
+    worker = make_worker(profile, hal)
+    worker.start()
+    worker.wait_ready(2)
+
+    new_profile = profile.with_overrides(frequency=869_525_000)
+    worker.reconfigure(new_profile)
+
+    assert wait_until(lambda: worker.profile.frequency == 869_525_000)
+    assert wait_until(lambda: hal.configure_calls == 2)
+    assert hal.start_calls == 2
+    assert hal.stop_calls >= 1
+    assert worker.online
+
+    assert worker.stop()
+
+
+def test_duty_cycle_delays_second_transmission(profile):
+    airtime_ms = 20
+    window_s = 0.2
+    hal = FakeHal(airtime_ms=airtime_ms)
+    sent_times: list[float] = []
+
+    def on_tx(payload):
+        sent_times.append(time.monotonic())
+
+    worker = make_worker(
+        profile,
+        hal,
+        on_tx=on_tx,
+        duty_cycle_percent=10.0,
+        duty_cycle_window_s=window_s,
+    )
+    worker.start()
+    worker.wait_ready(2)
+
+    worker.submit(b"first")
+    assert wait_until(lambda: len(hal.sent) == 1)
+    worker.submit(b"second")
+    assert wait_until(lambda: len(hal.sent) == 2)
+
+    # One packet of airtime fits exactly in the 10% of 200 ms budget, so the
+    # second must wait for the first to age out of the window.
+    assert sent_times[1] - sent_times[0] >= window_s * 0.8
+    assert worker.counters.duty_cycle_waits == 1
+    assert worker.counters.tx_airtime_ms == 2 * airtime_ms
+
+    assert worker.stop()
+
+
+def test_rx_continues_during_duty_cycle_wait(profile):
+    hal = FakeHal(airtime_ms=40)
+    received: list[bytes] = []
+    rx_event = threading.Event()
+
+    def on_rx(packet):
+        received.append(packet.payload)
+        rx_event.set()
+
+    worker = make_worker(
+        profile,
+        hal,
+        on_rx=on_rx,
+        duty_cycle_percent=10.0,
+        duty_cycle_window_s=0.5,
+    )
+    worker.start()
+    worker.wait_ready(2)
+
+    worker.submit(b"first")
+    assert wait_until(lambda: len(hal.sent) == 1)
+    worker.submit(b"second")
+
+    # The second frame is gated; a packet arriving now must still be received.
+    hal.rx_batches.append([make_rx(b"during-wait")])
+    assert rx_event.wait(0.25)
+    assert received == [b"during-wait"]
+    assert len(hal.sent) == 1
+
+    assert wait_until(lambda: len(hal.sent) == 2)
+    assert worker.stop()
+
+
+def test_lbt_waits_for_a_recent_frame(profile):
+    hal = FakeHal(airtime_ms=1)
+    hal.rx_batches.append([make_rx(b"busy", rssi=-50.0)])
+    worker = make_worker(
+        profile,
+        hal,
+        lbt_rssi_threshold=-80.0,
+        lbt_check_ms=150.0,
+        lbt_timeout_s=2.0,
+    )
+    worker.start()
+    worker.wait_ready(2)
+    assert wait_until(lambda: worker.counters.rx_packets == 1)
+
+    started = time.monotonic()
+    worker.submit(b"after-busy")
+    assert wait_until(lambda: hal.sent == [b"after-busy"], timeout=3)
+    elapsed = time.monotonic() - started
+
+    assert elapsed >= 0.1
+    assert worker.counters.lbt_busy_count >= 1
+    assert worker.counters.lbt_drops == 0
+
+    assert worker.stop()
+
+
+def test_lbt_drops_a_frame_after_the_timeout(profile):
+    class AlwaysBusyHal(FakeHal):
+        def receive(self, max_packets=8):
+            self._touch()
+            self.receive_calls += 1
+            return [make_rx(b"busy", rssi=-40.0)]
+
+    hal = AlwaysBusyHal(airtime_ms=1)
+    worker = make_worker(
+        profile,
+        hal,
+        lbt_rssi_threshold=-80.0,
+        lbt_check_ms=20.0,
+        lbt_timeout_s=0.15,
+    )
+    worker.start()
+    worker.wait_ready(2)
+
+    worker.submit(b"never-sent")
+    assert wait_until(lambda: worker.counters.lbt_drops == 1)
+    assert hal.sent == []
+    assert worker.counters.lbt_busy_count >= 1
+
+    assert worker.stop()

@@ -8,10 +8,12 @@ for Reticulum. It does **not** run a packet forwarder, does not speak GWMP, and
 does not emulate RNode KISS. Instead, a Reticulum external interface loads the
 SX1302 HAL as a shared library through `ctypes` and drives the radio directly.
 
-> **Status:** Phases 0–4 complete. Two RAK2287 nodes running Reticulum 1.5.7
+> **Status:** Phases 0–6 complete. Two RAK2287 nodes running Reticulum 1.5.7
 > exchange announces, path requests, `rnprobe` round trips in both directions,
 > and a 1 KB `rncp` transfer that exercises link setup and fragmentation.
-> Restart, soak and packaging checks remain. See [`PLAN.md`](PLAN.md) and the
+> Cold-start, warm-restart, runtime retuning, duty-cycle and LBT paths are
+> implemented and covered by hardware-independent tests. A multi-hour soak
+> test remains. See [`PLAN.md`](PLAN.md) and the
 > [Raspberry Pi test guide](docs/raspberry-pi-testing.md).
 
 ## Documentation
@@ -85,16 +87,34 @@ to a board profile such as `examples/rak2287-eu868.conf`. See `PLAN.md` and the
 
 ## Important limitations
 
+### Addressed in the current release
+
+- **Runtime retuning.** `SX1302Interface.reconfigure(profile)` and
+  `Radio.reconfigure(profile)` stop the HAL, apply a new board profile, and
+  restart it without restarting the process or losing the interface.
+- **Duty-cycle enforcement.** Set `duty_cycle_percent` (and optionally
+  `duty_cycle_window`) to gate transmissions over a sliding airtime window.
+  The worker keeps receiving while it waits, so a long ban does not deafen the
+  interface. Disabled by default (`duty_cycle_percent = 0`).
+- **Coarse listen-before-talk.** Set `lbt_rssi_threshold` to delay a
+  transmission while a frame with at least that RSSI was decoded within
+  `lbt_check_ms`. `lbt_timeout` bounds the wait before the frame is dropped.
+
+### Inherent limitations
+
 - The SX1302 HAL has global state: only one interface instance per process.
-- The radio configuration is fixed at startup; runtime retuning is not
-  supported in the first release.
-- There is no built-in CSMA/CAD or duty-cycle enforcement. Operators are
-  responsible for regional airtime rules.
 - The HAL TX payload limit is 255 bytes, so the interface advertises a
   254-byte hardware MTU and relies on Reticulum fragmentation. If IFAC is
   enabled, 16 bytes are reserved for the IFAC tag and the effective MTU is 238.
 - Board support is hardware-specific: temperature sensor, reset GPIOs, and TX
   gain LUT must match the actual board.
+- LBT is a quiet-period aid, not full CAD. The HAL does not expose an
+  instantaneous RSSI (and `RX_STATUS` is unimplemented for the SX1302), so LBT
+  only sees frames that share our sync word and were fully decoded. It cannot
+  detect raw energy or traffic using a different sync word.
+- Duty-cycle accounting uses the HAL's time-on-air calculation for frames this
+  node transmits. It does not account for retransmissions by Reticulum or for
+  frames sent by other software while this process owns the radio.
 
 ## Upstream license
 

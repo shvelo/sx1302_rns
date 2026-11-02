@@ -525,13 +525,14 @@ gpioinfo
 
 ## 12. What this does not validate yet
 
-- Restart and soak behaviour. Cold start, warm restart, repeated `rnsd`
-  stop/start, and multi-hour runs are separate Phase 5 checks.
-- Runtime frequency/SF/BW changes. The radio is configured once per process.
-- CSMA/CAD or automatic duty-cycle enforcement. You are responsible for
-  regional airtime rules.
+- Multi-hour soak behaviour. Cold start, warm restart and repeated `rnsd`
+  stop/start have been exercised separately; a long run is still a Phase 5
+  check.
 - Multiple SX1302 instances in one process. The HAL has global state.
 - Throughput, latency and packet loss at other SF/BW settings.
+- Raw-energy CSMA/CAD. The optional duty-cycle and LBT gates are covered by
+  hardware-independent tests; their on-air behaviour at 868.1 MHz should be
+  spot-checked on the Pi.
 
 ## 13. Recording a result
 
