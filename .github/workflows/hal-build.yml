@@ -2,20 +2,18 @@ name: Build HAL
 
 on:
   push:
-    branches: [feature/reticulum-sx1302-interface]
   pull_request:
-    branches: [feature/reticulum-sx1302-interface]
 
 jobs:
   build-hal:
-    if: github.event_name == 'push' && contains(github.ref, 'feature/reticulum-sx1302-interface')
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.14"
 

@@ -2,11 +2,7 @@ name: Python Tests
 
 on:
   push:
-    branches: [feature/reticulum-sx1302-interface]
   pull_request:
-    branches: [feature/reticulum-sx1302-interface]
-  schedule:
-    - cron: '0 2 * * 0'  # weekly
 
 jobs:
   test:
@@ -16,10 +12,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.14"
 
