@@ -626,10 +626,16 @@ class RadioWorker:
         )
         if airtime_ms > allowed_ms:
             # A single frame larger than the whole window budget can never
-            # satisfy the limit; let it through rather than blocking forever.
+            # satisfy the limit. Let it through only once the window has
+            # drained, so we do not send an unbounded burst of them.
+            with self._history_lock:
+                self._prune_tx_history(now)
+                if self._tx_history:
+                    return self._tx_history[-1][0] + self.duty_cycle_window_s
             self._log_error(
                 f"packet airtime {airtime_ms} ms exceeds the "
-                f"{allowed_ms:.0f} ms duty-cycle budget"
+                f"{allowed_ms:.0f} ms duty-cycle budget; sending once the "
+                "window is clear"
             )
             return now
 

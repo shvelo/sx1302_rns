@@ -365,6 +365,35 @@ def test_duty_cycle_delays_second_transmission(profile):
     assert worker.stop()
 
 
+def test_duty_cycle_limits_oversized_frames(profile):
+    # Each frame is larger than the whole window budget. The worker may send
+    # one, but must wait for the window to drain before sending the next.
+    airtime_ms = 40
+    window_s = 0.2
+    hal = FakeHal(airtime_ms=airtime_ms)
+    sent_times: list[float] = []
+
+    worker = make_worker(
+        profile,
+        hal,
+        on_tx=lambda payload: sent_times.append(time.monotonic()),
+        duty_cycle_percent=10.0,
+        duty_cycle_window_s=window_s,
+    )
+    worker.start()
+    worker.wait_ready(2)
+
+    worker.submit(b"first")
+    assert wait_until(lambda: len(hal.sent) == 1)
+    worker.submit(b"second")
+    assert wait_until(lambda: len(hal.sent) == 2)
+
+    assert sent_times[1] - sent_times[0] >= window_s * 0.8
+    assert worker.counters.duty_cycle_waits == 1
+
+    assert worker.stop()
+
+
 def test_rx_continues_during_duty_cycle_wait(profile):
     hal = FakeHal(airtime_ms=40)
     received: list[bytes] = []
