@@ -285,6 +285,27 @@ def test_reset_runs_around_the_hal(profile, monkeypatch):
     assert actions == ["start", "stop"]
 
 
+def test_reset_runs_during_reconfigure(profile, monkeypatch):
+    actions = []
+    monkeypatch.setattr(
+        "sx1302_reticulum.worker.run_reset",
+        lambda profile, action, log=None: actions.append(action),
+    )
+    hal = FakeHal()
+    worker = RadioWorker(profile, hal=hal, reset=True, rx_idle_sleep=0.001)
+    worker.start()
+    worker.wait_ready(2)
+    assert actions == ["start"]
+
+    new_profile = profile.with_overrides(frequency=869_525_000)
+    worker.reconfigure(new_profile)
+    assert wait_until(lambda: worker.profile.frequency == 869_525_000)
+    assert actions == ["start", "start"]
+
+    assert worker.stop()
+    assert actions == ["start", "start", "stop"]
+
+
 def test_submit_rejects_payload_over_limit(profile):
     hal = FakeHal()
     worker = make_worker(profile, hal)

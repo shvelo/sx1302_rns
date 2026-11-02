@@ -594,6 +594,13 @@ class RadioWorker:
     def _reconfigure(self, hal: RadioHal, new_profile: BoardProfile) -> None:
         """Stop RX, reconfigure the HAL, and resume RX with a new profile."""
         hal.stop()
+
+        # The SX1302/SX1250 does not reliably re-initialise after lgw_stop();
+        # a board reset is needed before the next lgw_start(). Use the new
+        # profile so a retune can also change the reset wiring.
+        if self.reset:
+            run_reset(new_profile, "start", log=self.log)
+
         hal.configure(new_profile)
         hal.start()
 
