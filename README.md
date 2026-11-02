@@ -8,13 +8,7 @@ for Reticulum. It does **not** run a packet forwarder, does not speak GWMP, and
 does not emulate RNode KISS. Instead, a Reticulum external interface loads the
 SX1302 HAL as a shared library through `ctypes` and drives the radio directly.
 
-> **Status:** Phases 0–7 complete. Two RAK2287 nodes running Reticulum 1.5.7
-> exchange announces, path requests, `rnprobe` round trips in both directions,
-> and a 1 KB `rncp` transfer that exercises link setup and fragmentation.
-> Cold-start, warm-restart, runtime retuning, duty-cycle and LBT paths are
-> implemented and covered by hardware-independent tests. A multi-hour soak
-> test has been completed. See [`PLAN.md`](PLAN.md) and the
-> [Raspberry Pi test guide](docs/raspberry-pi-testing.md).
+Tested on RAK Hotspot Miner V2.
 
 ## Documentation
 
@@ -52,7 +46,7 @@ vendor/sx1302_hal/     Upstream Semtech sx1302_hal v2.1.0
 - Linux host with SPI, I2C, and GPIO access.
 - An SX1302 concentrator board with one or more SX1250 radios.
 - Python 3.9+.
-- Reticulum 1.5.7 (pinned in `pyproject.toml`).
+- Reticulum 1.5.7
 - A board-specific TX gain LUT and reset/power configuration.
 
 ## Quick start
