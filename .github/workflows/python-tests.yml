@@ -13,9 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: python:3.14-slim
-    defaults:
-      run:
-        working-dir: /repo
 
     steps:
       - name: Checkout repository
