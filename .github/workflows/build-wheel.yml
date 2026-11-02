@@ -2,9 +2,7 @@ name: Build Python Wheel
 
 on:
   push:
-    branches: [feature/reticulum-sx1302-interface]
   pull_request:
-    branches: [feature/reticulum-sx1302-interface]
 
 jobs:
   build:
