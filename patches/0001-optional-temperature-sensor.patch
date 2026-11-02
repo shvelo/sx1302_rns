@@ -1,0 +1,113 @@
+--- a/libloragw/src/loragw_hal.c
++++ b/libloragw/src/loragw_hal.c
+@@ -1093,13 +1093,16 @@
+     dbg_init_random();
+ 
+     if (CONTEXT_COM_TYPE == LGW_COM_SPI) {
+-        /* Find the temperature sensor on the known supported ports */
++        /* Find the temperature sensor on the known supported ports.
++           The sensor is optional: RSSI temperature compensation is skipped
++           when it is not available. */
+         for (i = 0; i < (int)(sizeof I2C_PORT_TEMP_SENSOR); i++) {
+             ts_addr = I2C_PORT_TEMP_SENSOR[i];
+             err = i2c_linuxdev_open(I2C_DEVICE, ts_addr, &ts_fd);
+             if (err != LGW_I2C_SUCCESS) {
+-                printf("ERROR: failed to open I2C for temperature sensor on port 0x%02X\n", ts_addr);
+-                return LGW_HAL_ERROR;
++                printf("INFO: no temperature sensor found on port 0x%02X\n", ts_addr);
++                ts_fd = -1;
++                continue;
+             }
+ 
+             err = stts751_configure(ts_fd, ts_addr);
+@@ -1112,9 +1115,8 @@
+                 break;
+             }
+         }
+-        if (i == sizeof I2C_PORT_TEMP_SENSOR) {
+-            printf("ERROR: no temperature sensor found.\n");
+-            return LGW_HAL_ERROR;
++        if (ts_fd < 0) {
++            printf("WARNING: no temperature sensor found, continuing without RSSI temperature compensation\n");
+         }
+ 
+         /* Configure ADC AD338R for full duplex (CN490 reference design) */
+@@ -1222,11 +1224,14 @@
+     }
+ 
+     if (CONTEXT_COM_TYPE == LGW_COM_SPI) {
+-        DEBUG_MSG("INFO: Closing I2C for temperature sensor\n");
+-        x = i2c_linuxdev_close(ts_fd);
+-        if (x != 0) {
+-            printf("ERROR: failed to close I2C temperature sensor device (err=%i)\n", x);
+-            err = LGW_HAL_ERROR;
++        if (ts_fd >= 0) {
++            DEBUG_MSG("INFO: Closing I2C for temperature sensor\n");
++            x = i2c_linuxdev_close(ts_fd);
++            if (x != 0) {
++                printf("ERROR: failed to close I2C temperature sensor device (err=%i)\n", x);
++                err = LGW_HAL_ERROR;
++            }
++            ts_fd = -1;
+         }
+ 
+         if (CONTEXT_BOARD.full_duplex == true) {
+@@ -1254,6 +1259,7 @@
+     uint8_t nb_pkt_found = 0;
+     uint8_t nb_pkt_left = 0;
+     float current_temperature = 0.0, rssi_temperature_offset = 0.0;
++    bool temperature_available = false;
+     /* performances variables */
+     struct timeval tm;
+ 
+@@ -1286,11 +1292,13 @@
+         printf("WARNING: not enough space allocated, fetched %d packet(s), %d will be left in RX buffer\n", nb_pkt_fetched, nb_pkt_left);
+     }
+ 
+-    /* Apply RSSI temperature compensation */
++    /* Apply RSSI temperature compensation when a sensor is available */
+     res = lgw_get_temperature(&current_temperature);
+-    if (res != LGW_I2C_SUCCESS) {
+-        printf("ERROR: failed to get current temperature\n");
+-        return LGW_HAL_ERROR;
++    if (res == LGW_I2C_SUCCESS) {
++        temperature_available = true;
++    } else {
++        printf("WARNING: failed to get current temperature, skipping RSSI temperature compensation\n");
++        current_temperature = 0.0;
+     }
+ 
+     /* Iterate on the RX buffer to get parsed packets */
+@@ -1309,10 +1317,12 @@
+         pkt_data[nb_pkt_found].rssic += CONTEXT_RF_CHAIN[pkt_data[nb_pkt_found].rf_chain].rssi_offset;
+         pkt_data[nb_pkt_found].rssis += CONTEXT_RF_CHAIN[pkt_data[nb_pkt_found].rf_chain].rssi_offset;
+ 
+-        rssi_temperature_offset = sx1302_rssi_get_temperature_offset(&CONTEXT_RF_CHAIN[pkt_data[nb_pkt_found].rf_chain].rssi_tcomp, current_temperature);
+-        pkt_data[nb_pkt_found].rssic += rssi_temperature_offset;
+-        pkt_data[nb_pkt_found].rssis += rssi_temperature_offset;
+-        DEBUG_PRINTF("INFO: RSSI temperature offset applied: %.3f dB (current temperature %.1f C)\n", rssi_temperature_offset, current_temperature);
++        if (temperature_available) {
++            rssi_temperature_offset = sx1302_rssi_get_temperature_offset(&CONTEXT_RF_CHAIN[pkt_data[nb_pkt_found].rf_chain].rssi_tcomp, current_temperature);
++            pkt_data[nb_pkt_found].rssic += rssi_temperature_offset;
++            pkt_data[nb_pkt_found].rssis += rssi_temperature_offset;
++            DEBUG_PRINTF("INFO: RSSI temperature offset applied: %.3f dB (current temperature %.1f C)\n", rssi_temperature_offset, current_temperature);
++        }
+     }
+ 
+     DEBUG_PRINTF("INFO: nb pkt found:%u left:%u\n", nb_pkt_found, nb_pkt_left);
+@@ -1597,7 +1607,14 @@
+ 
+     switch (CONTEXT_COM_TYPE) {
+         case LGW_COM_SPI:
+-            err = stts751_get_temperature(ts_fd, ts_addr, temperature);
++            if (ts_fd < 0) {
++                /* No temperature sensor on this board: report a fixed value
++                   so callers can still apply a deterministic compensation. */
++                *temperature = 25.0f;
++                err = LGW_HAL_SUCCESS;
++            } else {
++                err = stts751_get_temperature(ts_fd, ts_addr, temperature);
++            }
+             break;
+         case LGW_COM_USB:
+             err = lgw_com_get_temperature(temperature);

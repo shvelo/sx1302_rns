@@ -1,0 +1,38 @@
+[Unit]
+Description=Reticulum Network Stack (SX1302 interface)
+Documentation=https://reticulum.network/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+SupplementaryGroups=spi gpio i2c
+WorkingDirectory=/home/pi/sx1302_rns
+ExecStartPre=/home/pi/sx1302_rns/scripts/reset_rak2287.sh start
+ExecStart=/home/pi/sx1302_rns/.venv/bin/rnsd --config /etc/reticulum/config
+ExecStopPost=/home/pi/sx1302_rns/scripts/reset_rak2287.sh stop
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rnsd-sx1302
+
+# Hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pi/sx1302_rns /etc/reticulum /var/log/reticulum
+DeviceAllow=/dev/spidev0.0 rw
+DeviceAllow=/dev/gpiochip* rw
+DeviceAllow=/dev/i2c-1 rw
+
+# Environment
+Environment=SX1302_HAL_LIB=/home/pi/sx1302_rns/build/libloragw.so
+Environment=PYTHONPATH=/home/pi/sx1302_rns
+Environment=PATH=/home/pi/sx1302_rns/.venv/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target
