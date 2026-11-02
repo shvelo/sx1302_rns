@@ -146,6 +146,11 @@ def main(argv: list[str] | None = None) -> int:
             "standard location, ``~/.reticulum/config`` or ``/etc/reticulum``)."
         ),
     )
+    parser.add_argument(
+        "--output-config",
+        action="store_true",
+        help="Output the board config file path and exit",
+    ),
     args = parser.parse_args(argv)
 
     # Resolve the config directory
@@ -154,6 +159,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"! Config directory not found: {config_dir}")
         print("  Create it or pass --profile /path/to/config")
         return 1
+
+    # Output config path if requested
+    if args.output_config:
+        profile_path = config_dir / "rak2287-eu868.conf"
+        if profile_path.is_file():
+            print(profile_path)
+        else:
+            print(f"! Board profile not found: {profile_path}")
+        return 0
 
     # ------------------------------------------------------------------
     # HAL library
