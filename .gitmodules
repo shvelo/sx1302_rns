@@ -1,0 +1,3 @@
+[submodule "vendor/sx1302_hal"]
+	path = vendor/sx1302_hal
+	url = https://github.com/Lora-net/sx1302_hal.git

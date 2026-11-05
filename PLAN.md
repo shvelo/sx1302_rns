@@ -2,7 +2,7 @@
 
 Status: Phases 0–6 complete; multi-hour soak test remaining
 Date: 2026-11-01
-Baseline: Semtech `sx1302_hal` v2.1.0 (now vendored under `vendor/sx1302_hal/`)  
+Baseline: Semtech `sx1302_hal` v2.1.0 (a git submodule at `vendor/sx1302_hal/`)  
 Reference: [`SX1302_RETICULUM_FINDINGS.md`](SX1302_RETICULUM_FINDINGS.md)
 
 ## 1. Goal
@@ -89,7 +89,7 @@ These can be revisited after the first release if the hardware proves usable.
 │   └── board.conf                    # board-specific HAL settings
 └── vendor/
     ├── README.md                     # provenance and patch policy
-    └── sx1302_hal/                   # upstream Semtech code, kept pristine
+    └── sx1302_hal/                   # upstream Semtech code as a git submodule
 ```
 
 The vendored tree remains unmodified where practical. Board-specific or
@@ -182,7 +182,7 @@ Reticulum process
 ### Phase 0 — Bootstrap (complete on this branch)
 
 - Create branch `feature/reticulum-sx1302-interface`.
-- Move upstream code to `vendor/sx1302_hal/`.
+- Add the upstream code as a git submodule at `vendor/sx1302_hal/`.
 - Add repository README, plan, and project `.gitignore`.
 - Record provenance and patch policy for the vendored tree.
 
