@@ -69,8 +69,9 @@ if [[ "${SKIP_ABI_CHECK:-0}" != "1" ]]; then
     python3 "$ROOT/scripts/abi_check.py" --source "$SRC"
 fi
 
-log "Checking shared library load"
-python3 - "$BUILD_DIR/libloragw.so" <<'PY'
+if [[ "${SKIP_LOAD_CHECK:-0}" != "1" ]]; then
+    log "Checking shared library load"
+    python3 - "$BUILD_DIR/libloragw.so" <<'PY'
 import ctypes
 import sys
 
@@ -81,5 +82,6 @@ if not version:
     raise SystemExit("lgw_version_info() returned NULL")
 print("    loaded %s, %s" % (sys.argv[1], version.decode("utf-8", "replace")))
 PY
+fi
 
 log "Built $BUILD_DIR/libloragw.so"
