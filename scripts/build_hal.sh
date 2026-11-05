@@ -40,14 +40,15 @@ fi
 
 TOOLS_CFLAGS="-O2 -Wall -Wextra -std=c99 -fPIC -Iinc -I."
 HAL_CFLAGS="-O2 -Wall -Wextra -std=c99 -fPIC -Iinc -I. -I../libtools/inc"
+CROSS_COMPILE="${CROSS_COMPILE:-}"
 
 log "Building libtools (PIC)"
 make -C "$SRC/libtools" clean
-make -C "$SRC/libtools" all CFLAGS="$TOOLS_CFLAGS"
+make -C "$SRC/libtools" all CFLAGS="$TOOLS_CFLAGS" CROSS_COMPILE="$CROSS_COMPILE"
 
 log "Building libloragw objects (PIC)"
 make -C "$SRC/libloragw" clean
-make -C "$SRC/libloragw" libloragw.a CFLAGS="$HAL_CFLAGS"
+make -C "$SRC/libloragw" libloragw.a CFLAGS="$HAL_CFLAGS" CROSS_COMPILE="$CROSS_COMPILE"
 
 log "Linking shared HAL"
 "$CC" -shared \
