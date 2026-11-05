@@ -112,7 +112,10 @@ to a board profile such as `examples/rak2287-eu868.conf`. See `PLAN.md` and the
   node transmits. It does not account for retransmissions by Reticulum or for
   frames sent by other software while this process owns the radio.
 
-## Upstream license
+## License
 
-The vendored Semtech code retains its original Revised BSD license. See
-`vendor/sx1302_hal/LICENSE.TXT`.
+This project is licensed under the [MIT License](LICENSE). The interface,
+scripts, and documentation are copyright Nikoloz Shvelidze.
+
+The vendored Semtech code in `vendor/sx1302_hal/` retains its original
+Revised BSD license; see `vendor/sx1302_hal/LICENSE.TXT`.
