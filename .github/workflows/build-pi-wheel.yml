@@ -60,3 +60,4 @@ jobs:
         with:
           name: sx1302-reticulum-pi-wheel
           path: /tmp/wheelhouse/*.whl
+          archive: false

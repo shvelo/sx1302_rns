@@ -36,3 +36,10 @@ jobs:
           else
             echo "✗ HAL library not found"
           fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sx1302-reticulum-hal
+          path: build/libloragw.so
+          archive: false

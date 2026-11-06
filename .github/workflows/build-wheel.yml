@@ -41,3 +41,4 @@ jobs:
         with:
           name: sx1302-reticulum-wheel
           path: /tmp/wheelhouse/*.whl
+          archive: false
